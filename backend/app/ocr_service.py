@@ -202,16 +202,19 @@ def parse_and_validate_payment(
     amounts_found = parsed_info["amounts_found"]
     amount_matches_expected = any(abs(amt - expected_amount) < 0.01 for amt in amounts_found)
 
+    primary_amount = parsed_info["amount"]
+
     # Decision Engine:
-    if (amount_matches_expected or len(amounts_found) == 0) and has_recipient_match and (has_success_indicator or has_upi_indicator):
+    if primary_amount is not None and not amount_matches_expected:
+        status = "REJECTED"
+        message = f"❌ Payment Rejected: Screenshot shows payment of ₹{primary_amount}, but required fee is ₹{expected_amount}."
+    elif amount_matches_expected and has_recipient_match and (has_success_indicator or has_upi_indicator):
         status = "APPROVED"
-        message = f"Payment screenshot verified successfully! Amount ₹{expected_amount} matched recipient ABRAHAM JOSEPH THADATHIL."
-    elif amount_matches_expected or has_recipient_match or has_upi_indicator:
-        status = "MANUAL_REVIEW"
-        message = "Screenshot received and queued. Required parameters detected, queued for final Admin verification."
+        message = f"✅ Payment Verified: ₹{expected_amount} paid to ABRAHAM JOSEPH THADATHIL."
     else:
         status = "MANUAL_REVIEW"
-        message = f"Screenshot uploaded. Expected ₹{expected_amount} to ABRAHAM JOSEPH THADATHIL; queued for Admin review."
+        message = f"⚡ Screenshot received (Extracted Amount: ₹{primary_amount if primary_amount is not None else 'Unclear'}); queued for Admin review."
+
 
     return {
         "status": status,

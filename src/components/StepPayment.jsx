@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { processScreenshotWithTesseract } from '../utils/ocrParser';
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'https://jesus-youth-ru8k.onrender.com').replace(/\/$/, '');
 
@@ -29,7 +30,6 @@ export default function StepPayment({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Clean up object URL when component unmounts or previewUrl changes
   useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -46,34 +46,49 @@ export default function StepPayment({
     setVerifyingOcr(true);
     setOcrResult(null);
 
-    // Call FastAPI backend /api/verify-payment endpoint for OCR analysis
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('expected_amount', totalAmount);
+      // 1. Browser-side Tesseract.js extraction
+      const clientResult = await processScreenshotWithTesseract(file, totalAmount);
+      
+      let finalStatus = clientResult.validationStatus || 'MANUAL_REVIEW';
+      let finalMsg = clientResult.validationMessage || 'Screenshot uploaded. Queued for Admin verification.';
 
-      const res = await fetch(`${API_BASE_URL}/api/verify-payment`, {
-        method: 'POST',
-        body: formData
+      // Set client result immediately
+      setOcrResult({
+        status: finalStatus,
+        message: finalMsg,
+        amount: clientResult.amount
       });
 
-      if (res.ok) {
-        const json = await res.json();
-        if (json.verification) {
-          setOcrResult(json.verification);
-        }
-      } else {
-        // Fallback default OCR structure if API error
-        setOcrResult({
-          status: 'MANUAL_REVIEW',
-          message: 'Screenshot attached successfully. Queued for Admin verification.'
+      // 2. Try Backend API call in background
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('expected_amount', totalAmount);
+
+        const res = await fetch(`${API_BASE_URL}/api/verify-payment`, {
+          method: 'POST',
+          body: formData
         });
+
+        if (res.ok) {
+          const json = await res.json();
+          if (json.verification) {
+            setOcrResult({
+              status: json.verification.status,
+              message: json.verification.message,
+              amount: json.verification.amounts_found?.[0] || clientResult.amount
+            });
+          }
+        }
+      } catch (backendErr) {
+        console.warn('Backend API notice, using browser OCR:', backendErr);
       }
     } catch (err) {
-      console.warn('Backend OCR verification offline, queuing screenshot locally:', err);
+      console.warn('OCR error during payment check:', err);
       setOcrResult({
         status: 'MANUAL_REVIEW',
-        message: 'Screenshot uploaded. Queued for fast Admin verification.'
+        message: 'Screenshot attached. Queued for fast Admin review.'
       });
     } finally {
       setVerifyingOcr(false);
@@ -240,7 +255,7 @@ export default function StepPayment({
             {verifyingOcr && (
               <div style={{ marginTop: 10, fontSize: 11, color: '#2563eb', fontWeight: 600 }}>
                 <span className="spinner" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 6 }} />
-                Analyzing payment screenshot with OCR engine...
+                Extracting text &amp; verifying payment amount with OCR engine...
               </div>
             )}
 
@@ -251,12 +266,12 @@ export default function StepPayment({
                 borderRadius: 8,
                 fontSize: 11,
                 textAlign: 'left',
-                background: ocrResult.status === 'APPROVED' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(234, 179, 8, 0.1)',
-                border: `1px solid ${ocrResult.status === 'APPROVED' ? 'rgba(34, 197, 94, 0.4)' : 'rgba(234, 179, 8, 0.4)'}`,
-                color: ocrResult.status === 'APPROVED' ? '#15803d' : '#a16207'
+                background: ocrResult.status === 'APPROVED' ? 'rgba(34, 197, 94, 0.1)' : ocrResult.status === 'REJECTED' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(234, 179, 8, 0.1)',
+                border: `1px solid ${ocrResult.status === 'APPROVED' ? 'rgba(34, 197, 94, 0.4)' : ocrResult.status === 'REJECTED' ? 'rgba(239, 68, 68, 0.4)' : 'rgba(234, 179, 8, 0.4)'}`,
+                color: ocrResult.status === 'APPROVED' ? '#15803d' : ocrResult.status === 'REJECTED' ? '#b91c1c' : '#a16207'
               }}>
                 <div style={{ fontWeight: 'bold', marginBottom: 2 }}>
-                  {ocrResult.status === 'APPROVED' ? '✅ Automated OCR Match: APPROVED' : '⚡ Screenshot Attached: queued for review'}
+                  {ocrResult.status === 'APPROVED' ? '✅ Automated OCR Match: APPROVED' : ocrResult.status === 'REJECTED' ? '❌ Payment Rejected (Amount Mismatch)' : '⚡ Screenshot Attached: queued for review'}
                 </div>
                 <div>{ocrResult.message}</div>
               </div>

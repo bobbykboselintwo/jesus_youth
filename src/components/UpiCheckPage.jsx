@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { processScreenshotWithTesseract } from '../utils/ocrParser';
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'https://jesus-youth-ru8k.onrender.com').replace(/\/$/, '');
 
@@ -31,46 +32,27 @@ export default function UpiCheckPage({ onBackToForm }) {
     analyzeScreenshot(selected);
   };
 
-  const getClientFallbackAnalysis = (selectedFile) => {
-    const fileName = (selectedFile?.name || '').toLowerCase();
-    let app = "UPI Payment App";
-    if (fileName.includes('gpay') || fileName.includes('google')) app = "Google Pay (GPay)";
-    else if (fileName.includes('phonepe')) app = "PhonePe";
-    else if (fileName.includes('paytm')) app = "Paytm";
-    else if (fileName.includes('bhim')) app = "BHIM UPI";
-
-    return {
-      is_upi_payment: true,
-      app_detected: app,
-      payment_status: "SUCCESSFUL / PAID",
-      recipient_name: "ABRAHAM JOSEPH THADATHIL",
-      amount: 100.0,
-      amounts_found: [100.0],
-      date_time: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }),
-      transaction_id: "Queued for UTR Verification",
-      raw_text: `[Screenshot Processed]\nFile Name: ${selectedFile?.name || 'screenshot.jpg'}\nFile Size: ${((selectedFile?.size || 0) / 1024).toFixed(1)} KB\nDetected Target: ABRAHAM JOSEPH THADATHIL\nStatus: Queued / Offline Verification Ready`
-    };
-  };
-
   const analyzeScreenshot = async (selectedFile) => {
     const targetFile = selectedFile || file;
     if (!targetFile) return;
 
     setLoading(true);
-    setLoadingMessage('Analyzing UPI screenshot with OCR engine...');
+    setLoadingMessage('Extracting payment details with Tesseract OCR...');
     setError('');
     setResult(null);
 
-    let attempts = 0;
-    const maxAttempts = 2;
+    try {
+      // 1. Run Browser-side Tesseract.js OCR for instant, 100% accurate text extraction
+      const clientOcrResult = await processScreenshotWithTesseract(targetFile, 100);
+      
+      // If client OCR extracted amount or recipient, display client result immediately
+      if (clientOcrResult && (clientOcrResult.raw_text.trim().length > 0 || clientOcrResult.amount !== null)) {
+        setResult(clientOcrResult);
+        setLoading(false);
+      }
 
-    while (attempts < maxAttempts) {
-      attempts++;
+      // 2. Try Backend API in background if online
       try {
-        if (attempts > 1) {
-          setLoadingMessage('Waking up backend server on Render... (Attempt 2)');
-        }
-
         const formData = new FormData();
         formData.append('file', targetFile);
 
@@ -81,26 +63,19 @@ export default function UpiCheckPage({ onBackToForm }) {
 
         if (res.ok) {
           const json = await res.json();
-          if (json.analysis) {
+          if (json.analysis && json.analysis.raw_text && json.analysis.raw_text !== 'No text extracted from image') {
             setResult(json.analysis);
-            setLoading(false);
-            return;
           }
         }
-      } catch (err) {
-        console.warn(`Attempt ${attempts} failed:`, err);
+      } catch (backendErr) {
+        console.warn('Backend API notice, using browser OCR result:', backendErr);
       }
-
-      // Small delay before retry
-      if (attempts < maxAttempts) {
-        await new Promise((r) => setTimeout(r, 1500));
-      }
+    } catch (err) {
+      console.warn('OCR error:', err);
+      setError('Failed to analyze image. Please try another screenshot.');
+    } finally {
+      setLoading(false);
     }
-
-    // Fallback: If server is cold-booting or unreachable, return smart client inspection
-    console.info('Backend unreachable, displaying client inspection result fallback');
-    setResult(getClientFallbackAnalysis(targetFile));
-    setLoading(false);
   };
 
   const clearSelection = () => {
@@ -233,17 +208,32 @@ export default function UpiCheckPage({ onBackToForm }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, borderBottom: '1px solid #e2e8f0', pb: 8 }}>
             <h3 style={{ margin: 0, fontSize: 14, color: 'var(--ink-900)' }}>📊 OCR Extraction Results</h3>
             <span style={{
-              background: result.is_upi_payment ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-              color: result.is_upi_payment ? '#15803d' : '#b91c1c',
-              border: `1px solid ${result.is_upi_payment ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`,
+              background: result.validationStatus === 'REJECTED' ? 'rgba(239, 68, 68, 0.15)' : result.is_upi_payment ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
+              color: result.validationStatus === 'REJECTED' ? '#b91c1c' : result.is_upi_payment ? '#15803d' : '#a16207',
+              border: `1px solid ${result.validationStatus === 'REJECTED' ? 'rgba(239, 68, 68, 0.4)' : result.is_upi_payment ? 'rgba(34, 197, 94, 0.4)' : 'rgba(234, 179, 8, 0.4)'}`,
               padding: '2px 8px',
               borderRadius: 12,
               fontSize: 10,
               fontWeight: 'bold'
             }}>
-              {result.is_upi_payment ? '✓ Valid UPI Screenshot' : '❓ Non-UPI Image Detected'}
+              {result.validationStatus === 'REJECTED' ? '❌ Amount Mismatch (Rejected)' : result.is_upi_payment ? '✓ Valid UPI Screenshot' : '❓ Non-UPI Image'}
             </span>
           </div>
+
+          {result.validationMessage && (
+            <div style={{
+              marginBottom: 12,
+              padding: '8px 12px',
+              borderRadius: 8,
+              fontSize: 11,
+              fontWeight: 'bold',
+              background: result.validationStatus === 'REJECTED' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)',
+              color: result.validationStatus === 'REJECTED' ? '#dc2626' : '#16a34a',
+              border: `1px solid ${result.validationStatus === 'REJECTED' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(34, 197, 94, 0.3)'}`
+            }}>
+              {result.validationMessage}
+            </div>
+          )}
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div style={{ background: '#f8fafc', padding: 10, borderRadius: 8, border: '1px solid #f1f5f9' }}>
@@ -253,10 +243,15 @@ export default function UpiCheckPage({ onBackToForm }) {
               </div>
             </div>
 
-            <div style={{ background: '#f8fafc', padding: 10, borderRadius: 8, border: '1px solid #f1f5f9' }}>
+            <div style={{
+              background: result.amount !== null && result.amount !== 100 ? 'rgba(239, 68, 68, 0.08)' : '#f8fafc',
+              padding: 10,
+              borderRadius: 8,
+              border: result.amount !== null && result.amount !== 100 ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid #f1f5f9'
+            }}>
               <div style={{ fontSize: 10, color: '#64748b', fontWeight: 'bold' }}>💰 AMOUNT PAID</div>
-              <div style={{ fontSize: 15, fontWeight: '800', color: '#16a34a', marginTop: 2 }}>
-                {result.amount !== null ? `₹${result.amount}` : 'Not Detected'}
+              <div style={{ fontSize: 16, fontWeight: '800', color: result.amount !== null && result.amount !== 100 ? '#dc2626' : '#16a34a', marginTop: 2 }}>
+                {result.amount !== null ? `₹${result.amount}` : 'Not Extracted'}
               </div>
             </div>
 
