@@ -1,0 +1,131 @@
+/* ============================================
+   KCYM VITAMIN C PAROPPADY REGISTRATION — SYSTEM DESIGN PALETTE
+   Visual Ratio: Red 60% | White & Gold 30% | Purple 5% | Black Ink Text
+   ============================================ */
+
+:root {
+  /* --- 🔴 PRIMARY RED (60%) --- */
+  --red-50: #fef2f2;
+  --red-100: #fee2e2;
+  --red-200: #fecaca;
+  --red-300: #fca5a5;
+  --red-400: #f87171;
+  --red-500: #dc2626; /* CTA red */
+  --red-600: #b91c1c; /* Pressed red */
+  --red-700: #991b1b; /* Main brand red */
+  --red-800: #7f1d1d; /* Deep red header/footer */
+  --red-900: #5c0f0f; /* Dark ceremonial */
+  --red-950: #450a0a;
+  --holy-red: #c8102e; /* Hero Brand Color */
+  --pentecost-red: #e63946;
+  --martyr-red: #8b0000;
+  --passion-red: #a4161a;
+  --heart-red: #d90429;
+  --crimson: #9b2226;
+  --cardinal: #800f2f;
+
+  /* --- ⚪🟡 WHITE & SACRED GOLD (30%) --- */
+  --white: #ffffff;
+  --ivory: #fffdf7;  /* Warm page background */
+  --cream: #fdfaf0;
+  --paper: #fefce8;
+  --pearl: #f8fafc;
+  --mist: #f1f5f9;
+  --silver: #e2e8f0;
+  --gold-50: #fffbeb;
+  --gold-100: #fef3c7;
+  --gold-300: #fcd34d;
+  --gold-500: #f59e0b; /* Primary Sacred Gold */
+  --gold-600: #d97706;
+  --gold-700: #b45309;
+  --gold-900: #78350f;
+
+  /* --- 🟣 ACCENT PURPLE (5%) --- */
+  --purple-50: #faf5ff;
+  --purple-100: #f3e8ff;
+  --purple-300: #d8b4fe;
+  --purple-400: #a78bfa;
+  --purple-500: #8b5cf6;
+  --purple-600: #7c3aed;
+  --purple-700: #6d28d9; /* Liturgical Deep Purple */
+  --advent-purple: #4c1d95;
+
+  /* --- ⚫ BLACK & INK (Text Layer) --- */
+  --black: #000000;
+  --ink-900: #0a0a0a; /* Headings */
+  --ink-800: #171717; /* Body text */
+  --ink-600: #404040; /* Secondary text */
+  --ink-500: #525252; /* Muted text */
+  --ink-400: #737373; /* Placeholders */
+  --ink-200: #e5e5e5; /* Borders */
+  --ink-100: #f5f5f5; /* Inputs */
+
+  /* --- 🌈 GRADIENTS --- */
+  --grad-app: linear-gradient(160deg, #5c0f0f 0%, #991b1b 45%, #dc2626 100%);
+  --grad-hero: linear-gradient(135deg, #7f1d1d 0%, #c8102e 60%, #e63946 100%);
+  --grad-red-btn: linear-gradient(135deg, #991b1b, #dc2626);
+  --grad-gold: linear-gradient(135deg, #d97706, #fcd34d);
+  --grad-progress: linear-gradient(90deg, #991b1b, #dc2626, #f59e0b);
+  --grad-purple: linear-gradient(135deg, #6d28d9, #a78bfa);
+
+  /* --- 📌 SEMANTIC ALIASES --- */
+  --color-brand: var(--red-500);
+  --color-brand-deep: var(--red-700);
+  --color-accent: var(--gold-500);
+  --color-liturgical: var(--purple-700);
+  --color-text: var(--ink-800);
+  --color-text-heading: var(--ink-900);
+  --color-text-muted: var(--ink-500);
+  --color-bg-app: var(--ivory);
+  --color-bg-card: var(--white);
+  --color-bg-input: var(--ink-100);
+  --color-border: var(--ink-200);
+  --color-focus-ring: rgba(220, 38, 38, 0.2);
+  --color-success: #15803d;
+  --color-error: var(--red-600);
+}
+
+/* ============================================
+   BASE RESETS & ACCESSIBILITY
+   ============================================ */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--color-bg-app);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+  overflow-x: hidden;
+}
+
+/* Scale base typography to 0.7x as requested */
+input, select, textarea, button {
+  font-size: 11.2px;
+}
+
+
+input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 48px;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--ink-200);
+  border-radius: 99px;
+}

@@ -1,0 +1,28 @@
+services:
+  # 🐍 Python FastAPI Backend Web Service
+  - type: web
+    name: jesus-youth-backend
+    env: python
+    region: singapore
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: MONGODB_URL
+        value: mongodb+srv://admin:admin@cluster.rnhig2f.mongodb.net/jesus_youth
+      - key: DATABASE_NAME
+        value: jesus_youth
+      - key: CORS_ORIGINS
+        value: "*"
+
+  # ⚡ React Frontend Static Site
+  - type: static
+    name: jesus-youth-frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        fromService:
+          type: web
+          name: jesus-youth-backend
+          property: url
