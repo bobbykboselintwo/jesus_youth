@@ -199,6 +199,16 @@ export default function AdminDashboard({
                       <span className={`status-pill pill-${itemStatus.toLowerCase()}`}>
                         {itemStatus}
                       </span>
+                      {item.ocrStatus && (
+                        <div style={{
+                          fontSize: '8px',
+                          marginTop: 3,
+                          fontWeight: 'bold',
+                          color: item.ocrStatus === 'APPROVED' ? '#16a34a' : '#d97706'
+                        }}>
+                          🤖 OCR: {item.ocrStatus}
+                        </div>
+                      )}
                     </td>
                     <td>
                       <div className="action-btn-group">

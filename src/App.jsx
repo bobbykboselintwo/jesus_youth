@@ -322,7 +322,7 @@ export default function App() {
   };
 
   // Step 5 Submit Payment Details for Group / Individual
-  const handlePaymentSubmit = async () => {
+  const handlePaymentSubmit = async (screenshotFile, ocrResult) => {
     setSubmitting(true);
     setSubmitError('');
 
@@ -339,6 +339,9 @@ export default function App() {
     let uniqueIdsSummary = [];
     let currentSeq = mvpSubmissions.length + 1;
 
+    // Determine registration status based on OCR result
+    const calculatedStatus = ocrResult?.status === 'APPROVED' ? 'APPROVED' : 'PENDING';
+
     for (let i = 0; i < allMembers.length; i++) {
       const m = allMembers[i];
       const seqStr = String(currentSeq++).padStart(4, '0');
@@ -350,9 +353,11 @@ export default function App() {
         regId: uniqueId,
         device_id: isPrimary ? deviceId : `device_${m.phone || Math.random().toString(36).substring(2, 9)}`,
         registeredBy: isPrimary ? 'Primary / Self' : primaryFullName,
-        registrationStatus: 'PENDING',
-        paymentStatus: 'SUBMITTED',
+        registrationStatus: calculatedStatus,
+        paymentStatus: calculatedStatus === 'APPROVED' ? 'VERIFIED' : 'SUBMITTED',
         amount: 100.0,
+        ocrStatus: ocrResult?.status || null,
+        ocrMessage: ocrResult?.message || null,
         submittedAt: new Date().toISOString()
       };
 
@@ -374,6 +379,23 @@ export default function App() {
       uniqueIdsSummary.push(`${i + 1}. ${m.fullName}: ${record.regId}`);
     }
 
+    // If a screenshot file was attached, send to FastAPI for backend OCR verification & Mongo sync
+    if (screenshotFile) {
+      try {
+        const formData = new FormData();
+        formData.append('file', screenshotFile);
+        formData.append('device_id', deviceId);
+        formData.append('expected_amount', allMembers.length * 100);
+
+        await fetch(`${API_BASE_URL}/api/verify-payment`, {
+          method: 'POST',
+          body: formData,
+        });
+      } catch (err) {
+        console.warn('FastAPI backend payment verification offline, updated local state:', err);
+      }
+    }
+
     // Persist in local state
     setMvpSubmissions((prev) => [...newRecords, ...prev.filter((s) => s.device_id !== deviceId)]);
     setUserRegistration(newRecords[0]); // Set Primary delegate for Status View
@@ -388,6 +410,7 @@ export default function App() {
       setStep(6); // Show Device Status View
     }, 1200);
   };
+
 
   // Fetch all registrations from MongoDB for Admin Dashboard
   const fetchAdminRegistrations = async () => {

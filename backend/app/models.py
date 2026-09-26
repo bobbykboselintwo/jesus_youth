@@ -24,6 +24,12 @@ class StudentRegistrationSchema(BaseModel):
     dataConsent: bool = Field(default=True, description="Data Consent Agreement")
 
     submittedAt: Optional[str] = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    
+    ocrStatus: Optional[str] = Field(None, description="APPROVED | MANUAL_REVIEW | REJECTED")
+    ocrMessage: Optional[str] = Field(None, description="OCR Verification Result Summary")
+    ocrVerifiedAt: Optional[str] = Field(None, description="ISO Timestamp of OCR verification")
+    ocrExtractedText: Optional[str] = Field(None, description="Snippet of OCR extracted text")
+    ocrTransactionId: Optional[str] = Field(None, description="Extracted UTR / Transaction ID")
 
 class AdminActionSchema(BaseModel):
     device_id: str = Field(..., description="Target Device ID or Primary Phone")

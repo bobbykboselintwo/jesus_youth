@@ -1,9 +1,9 @@
-import csv
-import io
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, HTTPException, Query, Response, UploadFile, File, Form
 from app.models import StudentRegistrationSchema, AdminActionSchema, APIResponseSchema
 from app.database import get_collection, db
+from app.ocr_service import parse_and_validate_payment
 from datetime import datetime
+from typing import Optional
 
 router = APIRouter(prefix="/api", tags=["Registrations"])
 
@@ -62,6 +62,66 @@ async def register_student(payload: StudentRegistrationSchema):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save registration: {str(e)}")
+
+
+@router.post("/verify-payment")
+async def verify_payment_screenshot(
+    file: UploadFile = File(...),
+    device_id: Optional[str] = Form(None),
+    regId: Optional[str] = Form(None),
+    expected_amount: Optional[float] = Form(100.0)
+):
+    """
+    Accepts uploaded GPay/UPI payment screenshot, processes in-memory using OpenCV+Tesseract,
+    updates MongoDB registration status, and returns instant verification result.
+    """
+    try:
+        contents = await file.read()
+        if not contents:
+            raise HTTPException(status_code=400, detail="Empty screenshot file uploaded.")
+
+        verification = parse_and_validate_payment(contents, expected_amount=expected_amount or 100.0)
+        del contents  # Ensure immediate RAM release
+
+        ocr_status = verification["status"]
+        ocr_message = verification["message"]
+
+        # Update document in MongoDB Atlas if client is connected and identifier provided
+        if db.client is not None and (device_id or regId):
+            collection = get_collection("registrations")
+            identifier = device_id or regId
+            
+            update_payload = {
+                "ocrStatus": ocr_status,
+                "ocrMessage": ocr_message,
+                "ocrVerifiedAt": datetime.utcnow().isoformat(),
+                "ocrExtractedText": verification.get("raw_text_snippet"),
+                "ocrTransactionId": verification.get("transaction_id"),
+                "paymentStatus": "VERIFIED" if ocr_status == "APPROVED" else "PENDING_REVIEW",
+                "registrationStatus": ocr_status if ocr_status in ["APPROVED", "MANUAL_REVIEW"] else "PENDING",
+                "updatedAt": datetime.utcnow()
+            }
+
+            await collection.update_many(
+                {
+                    "$or": [
+                        {"device_id": identifier},
+                        {"phone": identifier},
+                        {"regId": identifier}
+                    ]
+                },
+                {"$set": update_payload}
+            )
+
+        return {
+            "status": "success",
+            "verification": verification,
+            "ocrStatus": ocr_status,
+            "ocrMessage": ocr_message
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Payment verification failed: {str(e)}")
 
 
 @router.get("/status/{device_id}")
