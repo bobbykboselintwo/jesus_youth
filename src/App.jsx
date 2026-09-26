@@ -114,11 +114,12 @@ export default function App() {
     }
   }, []);
 
-  // Check URL pathname for /admin or /upi-check or fetch user status on load
+  // Check URL pathname, hash, or search query for /admin or /upi-check on load
   useEffect(() => {
-    if (window.location.pathname.includes('/upi-check')) {
+    const href = window.location.href.toLowerCase();
+    if (href.includes('/upi-check') || href.includes('#upi-check') || href.includes('?upi-check')) {
       setStep(-3);
-    } else if (window.location.pathname.includes('/admin')) {
+    } else if (href.includes('/admin') || href.includes('#admin') || href.includes('?admin')) {
       setStep(-1);
     } else {
       checkDeviceRegistration();
