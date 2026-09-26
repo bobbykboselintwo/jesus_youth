@@ -1,13 +1,15 @@
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
+
 
 class StudentRegistrationSchema(BaseModel):
     device_id: str = Field(..., description="Unique Device Token")
     name: str = Field(..., min_length=1, max_length=100, description="First Name")
     surname: str = Field(..., min_length=1, max_length=100, description="Surname")
     phone: str = Field(..., description="Mobile Number")
-    email: EmailStr = Field(..., description="Email Address")
+    email: str = Field(..., description="Email Address")
+
     parish: str = Field(..., description="Parish Name")
     diocese: str = Field(..., description="Diocese Name")
     tShirtSize: str = Field(..., description="T-Shirt Size (S, M, L, XL, XXL, 3XL)")
