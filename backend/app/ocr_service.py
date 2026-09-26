@@ -127,31 +127,33 @@ def parse_any_upi_screenshot(image_bytes: bytes) -> Dict[str, Any]:
 
     # 5. Extract Recipient Name / Account
     recipient_name = None
-    # Pattern A: Look for lines after "Paid to" or "To" or "Banking name:"
     for i, line in enumerate(lines):
         line_l = line.lower()
-        if "paid to" in line_l or "transferred to" in line_l or "banking name" in line_l or "receiver" in line_l:
-            # Check next line or same line
-            cleaned = re.sub(r'^(paid to|transferred to|banking name:?|to:?)\s*', '', line, flags=re.IGNORECASE).strip()
+        if "paid to" in line_l or "transferred to" in line_l or "receiver" in line_l:
+            cleaned = re.sub(r'^(paid to|transferred to|to:?)\s*', '', line, flags=re.IGNORECASE).strip()
             if cleaned and len(cleaned) > 2 and not cleaned.lower().startswith("banking name"):
                 recipient_name = cleaned
                 break
             elif i + 1 < len(lines):
-                candidate = lines[i + 1].strip()
-                if candidate and len(candidate) > 2 and not any(kw in candidate.lower() for kw in ["banking name", "powered by", "upi", "₹"]):
-                    recipient_name = candidate
+                candidate1 = lines[i + 1].strip()
+                candidate2 = lines[i + 2].strip() if i + 2 < len(lines) else ""
+                
+                if candidate1 and len(candidate1) > 2 and not any(kw in candidate1.lower() for kw in ["banking name", "powered by", "upi", "₹"]):
+                    if candidate2 and candidate2.isupper() and not any(kw in candidate2.lower() for kw in ["banking name", "powered by", "upi", "₹"]):
+                        recipient_name = f"{candidate1} {candidate2}"
+                    else:
+                        recipient_name = candidate1
                     break
 
-    # If recipient not found via prefix, check hardcoded or prominent uppercase name candidates
     if not recipient_name:
         if "abraham" in text_lower or "joseph" in text_lower or "thadathil" in text_lower:
             recipient_name = "ABRAHAM JOSEPH THADATHIL"
         else:
-            # Look for 2-3 word capitalized lines
             for line in lines:
                 if len(line.split()) in [2, 3, 4] and line.isupper() and not any(kw in line.lower() for kw in ["powered", "upi", "google", "paid", "success", "banking"]):
                     recipient_name = line
                     break
+
 
     # 6. Extract Date & Time
     date_time_str = None

@@ -5,7 +5,7 @@ services:
     env: python
     region: singapore
     rootDir: backend
-    buildCommand: pip install -r requirements.txt
+    buildCommand: apt-get update && apt-get install -y tesseract-ocr tesseract-ocr-eng libgl1-mesa-glx || true && pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: MONGODB_URL

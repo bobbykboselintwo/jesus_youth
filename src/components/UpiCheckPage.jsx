@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { processScreenshotWithTesseract } from '../utils/ocrParser';
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'https://jesus-youth-ru8k.onrender.com').replace(/\/$/, '');
 
@@ -7,7 +6,7 @@ export default function UpiCheckPage({ onBackToForm }) {
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const [loading, setLoading] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState('Analyzing UPI screenshot with OCR engine...');
+  const [loadingMessage, setLoadingMessage] = useState('Analyzing screenshot on backend server...');
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
   const [showRawText, setShowRawText] = useState(false);
@@ -28,31 +27,29 @@ export default function UpiCheckPage({ onBackToForm }) {
     setError('');
     setResult(null);
 
-    // Automatically analyze upon file selection
-    analyzeScreenshot(selected);
+    // Trigger backend server analysis upon file selection
+    analyzeScreenshotOnServer(selected);
   };
 
-  const analyzeScreenshot = async (selectedFile) => {
+  const analyzeScreenshotOnServer = async (selectedFile) => {
     const targetFile = selectedFile || file;
     if (!targetFile) return;
 
     setLoading(true);
-    setLoadingMessage('Extracting payment details with Tesseract OCR...');
+    setLoadingMessage('Analyzing payment screenshot on backend server (takes 2-4 seconds)...');
     setError('');
     setResult(null);
 
-    try {
-      // 1. Run Browser-side Tesseract.js OCR for instant, 100% accurate text extraction
-      const clientOcrResult = await processScreenshotWithTesseract(targetFile, 100);
-      
-      // If client OCR extracted amount or recipient, display client result immediately
-      if (clientOcrResult && (clientOcrResult.raw_text.trim().length > 0 || clientOcrResult.amount !== null)) {
-        setResult(clientOcrResult);
-        setLoading(false);
-      }
+    let attempts = 0;
+    const maxAttempts = 3;
 
-      // 2. Try Backend API in background if online
+    while (attempts < maxAttempts) {
+      attempts++;
       try {
+        if (attempts > 1) {
+          setLoadingMessage(`Connecting to Render server... (Attempt ${attempts}/${maxAttempts})`);
+        }
+
         const formData = new FormData();
         formData.append('file', targetFile);
 
@@ -63,19 +60,23 @@ export default function UpiCheckPage({ onBackToForm }) {
 
         if (res.ok) {
           const json = await res.json();
-          if (json.analysis && json.analysis.raw_text && json.analysis.raw_text !== 'No text extracted from image') {
+          if (json.analysis) {
             setResult(json.analysis);
+            setLoading(false);
+            return;
           }
         }
-      } catch (backendErr) {
-        console.warn('Backend API notice, using browser OCR result:', backendErr);
+      } catch (err) {
+        console.warn(`Backend connection attempt ${attempts} notice:`, err);
       }
-    } catch (err) {
-      console.warn('OCR error:', err);
-      setError('Failed to analyze image. Please try another screenshot.');
-    } finally {
-      setLoading(false);
+
+      if (attempts < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 2000));
+      }
     }
+
+    setLoading(false);
+    setError('Server connection timeout or waking up. Please click Analyze again or re-upload image.');
   };
 
   const clearSelection = () => {
@@ -90,7 +91,7 @@ export default function UpiCheckPage({ onBackToForm }) {
     <div className="step" style={{ maxWidth: 640, margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 18 }}>🔍 UPI Payment Screenshot Inspector</h2>
+          <h2 style={{ margin: 0, fontSize: 18 }}>🔍 Server-Side UPI Screenshot Inspector</h2>
           <span style={{ fontSize: 10, color: 'var(--jy-crimson)', fontWeight: 'bold' }}>URL: /upi-check</span>
         </div>
         <button
@@ -104,7 +105,7 @@ export default function UpiCheckPage({ onBackToForm }) {
       </div>
 
       <p className="hint" style={{ fontSize: 11, marginBottom: 16 }}>
-        Upload any screenshot or payment image to inspect payee name, amount, timestamp, UTR reference number, and UPI app status.
+        Upload any screenshot or payment image to analyze payee name, amount, timestamp, UTR reference number, and UPI app status via Python FastAPI OCR engine.
       </p>
 
       {/* Upload Zone */}
@@ -135,7 +136,7 @@ export default function UpiCheckPage({ onBackToForm }) {
               fontSize: 12,
               cursor: 'pointer'
             }}>
-              📷 Upload Image
+              📷 Upload Image to Server
               <input
                 type="file"
                 accept="image/*"
@@ -158,14 +159,24 @@ export default function UpiCheckPage({ onBackToForm }) {
                 boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
               }}
             />
-            <div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => analyzeScreenshotOnServer(file)}
+                disabled={loading}
+                style={{ fontSize: 11, padding: '5px 14px' }}
+              >
+                {loading ? <span className="spinner" /> : '⚡ Re-Analyze on Server'}
+              </button>
               <button
                 type="button"
                 className="btn-secondary"
                 onClick={clearSelection}
-                style={{ fontSize: 11, padding: '4px 12px', color: 'var(--red-700)' }}
+                disabled={loading}
+                style={{ fontSize: 11, padding: '5px 12px', color: 'var(--red-700)' }}
               >
-                🗑 Choose Different Image
+                🗑 Remove
               </button>
             </div>
           </div>
@@ -206,34 +217,19 @@ export default function UpiCheckPage({ onBackToForm }) {
           boxShadow: '0 4px 16px rgba(0,0,0,0.06)'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, borderBottom: '1px solid #e2e8f0', pb: 8 }}>
-            <h3 style={{ margin: 0, fontSize: 14, color: 'var(--ink-900)' }}>📊 OCR Extraction Results</h3>
+            <h3 style={{ margin: 0, fontSize: 14, color: 'var(--ink-900)' }}>📊 Python Server OCR Results</h3>
             <span style={{
-              background: result.validationStatus === 'REJECTED' ? 'rgba(239, 68, 68, 0.15)' : result.is_upi_payment ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
-              color: result.validationStatus === 'REJECTED' ? '#b91c1c' : result.is_upi_payment ? '#15803d' : '#a16207',
-              border: `1px solid ${result.validationStatus === 'REJECTED' ? 'rgba(239, 68, 68, 0.4)' : result.is_upi_payment ? 'rgba(34, 197, 94, 0.4)' : 'rgba(234, 179, 8, 0.4)'}`,
+              background: result.amount !== null && result.amount !== 100 ? 'rgba(239, 68, 68, 0.15)' : result.is_upi_payment ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
+              color: result.amount !== null && result.amount !== 100 ? '#b91c1c' : result.is_upi_payment ? '#15803d' : '#a16207',
+              border: `1px solid ${result.amount !== null && result.amount !== 100 ? 'rgba(239, 68, 68, 0.4)' : result.is_upi_payment ? 'rgba(34, 197, 94, 0.4)' : 'rgba(234, 179, 8, 0.4)'}`,
               padding: '2px 8px',
               borderRadius: 12,
               fontSize: 10,
               fontWeight: 'bold'
             }}>
-              {result.validationStatus === 'REJECTED' ? '❌ Amount Mismatch (Rejected)' : result.is_upi_payment ? '✓ Valid UPI Screenshot' : '❓ Non-UPI Image'}
+              {result.amount !== null && result.amount !== 100 ? `❌ Amount Mismatch (₹${result.amount})` : result.is_upi_payment ? '✓ Valid UPI Screenshot' : '❓ Non-UPI Image'}
             </span>
           </div>
-
-          {result.validationMessage && (
-            <div style={{
-              marginBottom: 12,
-              padding: '8px 12px',
-              borderRadius: 8,
-              fontSize: 11,
-              fontWeight: 'bold',
-              background: result.validationStatus === 'REJECTED' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)',
-              color: result.validationStatus === 'REJECTED' ? '#dc2626' : '#16a34a',
-              border: `1px solid ${result.validationStatus === 'REJECTED' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(34, 197, 94, 0.3)'}`
-            }}>
-              {result.validationMessage}
-            </div>
-          )}
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div style={{ background: '#f8fafc', padding: 10, borderRadius: 8, border: '1px solid #f1f5f9' }}>
@@ -299,7 +295,7 @@ export default function UpiCheckPage({ onBackToForm }) {
                 padding: 0
               }}
             >
-              {showRawText ? '▼ Hide Raw Extracted Text' : '▶ Show Raw Extracted OCR Text'}
+              {showRawText ? '▼ Hide Raw Server OCR Text' : '▶ Show Raw Server OCR Text'}
             </button>
 
             {showRawText && (
