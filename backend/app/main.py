@@ -37,7 +37,9 @@ app.include_router(registration_router)
 @app.get("/api/health", tags=["Health"])
 async def health_check():
     return {
-        "status": "healthy",
+        "status": "THE API IS UP",
+        "message": "THE API IS UP",
         "service": settings.PROJECT_NAME,
         "version": settings.PROJECT_VERSION
     }
+
