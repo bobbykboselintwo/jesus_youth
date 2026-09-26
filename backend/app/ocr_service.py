@@ -64,9 +64,15 @@ def parse_any_upi_screenshot(image_bytes: bytes) -> Dict[str, Any]:
     5. Transaction ID / UTR number
     6. Payment Status & App source (GPay, PhonePe, Paytm, etc.)
     """
-    raw_text = extract_text_from_image(image_bytes)
+    try:
+        raw_text = extract_text_from_image(image_bytes)
+    except Exception as e:
+        logger.warning(f"Failed to extract text from image: {str(e)}")
+        raw_text = ""
+
     text_lower = raw_text.lower()
     lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
+
 
     # 1. Detect UPI & Payment Apps
     app_detected = "Unknown / General UPI"
