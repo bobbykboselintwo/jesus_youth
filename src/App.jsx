@@ -11,6 +11,7 @@ import StepStatusView from './components/StepStatusView';
 import StepSuccess from './components/StepSuccess';
 import AdminLogin from './components/AdminLogin';
 import AdminDashboard from './components/AdminDashboard';
+import UpiCheckPage from './components/UpiCheckPage';
 import BackgroundPoster from './components/BackgroundPoster';
 import { getDeviceId } from './utils/device';
 import { saveDraft, loadDraft, clearDraft } from './utils/storage';
@@ -113,9 +114,11 @@ export default function App() {
     }
   }, []);
 
-  // Check URL pathname for /admin or fetch user status on load
+  // Check URL pathname for /admin or /upi-check or fetch user status on load
   useEffect(() => {
-    if (window.location.pathname.includes('/admin')) {
+    if (window.location.pathname.includes('/upi-check')) {
+      setStep(-3);
+    } else if (window.location.pathname.includes('/admin')) {
       setStep(-1);
     } else {
       checkDeviceRegistration();
@@ -474,7 +477,26 @@ export default function App() {
           <h1>KCYM SMYM PAROPPADY MEKHALA</h1>
           <p className="subtitle">VITAMIN C</p>
 
-          <div className="header-actions">
+          <div className="header-actions" style={{ display: 'flex', gap: 6 }}>
+            {step === -3 ? (
+              <button
+                type="button"
+                className="btn-icon-tag"
+                onClick={() => setStep(userRegistration ? 6 : 0)}
+              >
+                App Form 📋
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn-icon-tag"
+                onClick={() => setStep(-3)}
+                style={{ background: 'rgba(217, 4, 41, 0.1)', color: 'var(--jy-crimson)' }}
+              >
+                UPI Check 🔍
+              </button>
+            )}
+
             {step === -2 || step === -1 ? (
               <button
                 type="button"
@@ -523,6 +545,13 @@ export default function App() {
             </div>
           )}
 
+          {/* Step -3: Standalone UPI Screenshot Inspector (/upi-check) */}
+          {step === -3 && (
+            <UpiCheckPage
+              onBackToForm={() => setStep(userRegistration ? 6 : 0)}
+            />
+          )}
+
           {/* Step -1: Admin Login */}
           {step === -1 && (
             <AdminLogin
@@ -533,6 +562,7 @@ export default function App() {
               }}
             />
           )}
+
 
           {/* Step -2: Admin Portal Dashboard */}
           {step === -2 && (

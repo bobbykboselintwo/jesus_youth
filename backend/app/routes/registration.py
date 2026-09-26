@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query, Response, UploadFile, File, Form
 from app.models import StudentRegistrationSchema, AdminActionSchema, APIResponseSchema
 from app.database import get_collection, db
-from app.ocr_service import parse_and_validate_payment
+from app.ocr_service import parse_and_validate_payment, parse_any_upi_screenshot
 from datetime import datetime
 from typing import Optional
 
@@ -122,6 +122,29 @@ async def verify_payment_screenshot(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Payment verification failed: {str(e)}")
+
+
+@router.post("/check-upi")
+async def standalone_upi_check(file: UploadFile = File(...)):
+    """
+    Standalone endpoint for /upi-check tool.
+    Extracts Payee Name, Amount, Date & Time, UTR, App Name, and Payment Status from ANY uploaded screenshot.
+    """
+    try:
+        contents = await file.read()
+        if not contents:
+            raise HTTPException(status_code=400, detail="Empty image uploaded.")
+
+        analysis = parse_any_upi_screenshot(contents)
+        del contents  # Release RAM immediately
+
+        return {
+            "status": "success",
+            "analysis": analysis
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"UPI Screenshot analysis failed: {str(e)}")
+
 
 
 @router.get("/status/{device_id}")
