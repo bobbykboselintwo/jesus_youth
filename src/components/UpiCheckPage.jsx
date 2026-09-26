@@ -36,18 +36,20 @@ export default function UpiCheckPage({ onBackToForm }) {
     if (!targetFile) return;
 
     setLoading(true);
-    setLoadingMessage('Analyzing payment screenshot on backend server (takes 2-4 seconds)...');
+    setLoadingMessage('Sending screenshot to backend server...');
     setError('');
     setResult(null);
 
     let attempts = 0;
-    const maxAttempts = 3;
+    const maxAttempts = 8;
 
     while (attempts < maxAttempts) {
       attempts++;
       try {
-        if (attempts > 1) {
-          setLoadingMessage(`Connecting to Render server... (Attempt ${attempts}/${maxAttempts})`);
+        if (attempts === 1) {
+          setLoadingMessage('Analyzing screenshot on Python FastAPI backend server...');
+        } else {
+          setLoadingMessage(`⚡ Waking up Render free server... (Attempt ${attempts}/${maxAttempts} - cold boot takes ~20-30s)`);
         }
 
         const formData = new FormData();
@@ -71,12 +73,12 @@ export default function UpiCheckPage({ onBackToForm }) {
       }
 
       if (attempts < maxAttempts) {
-        await new Promise((r) => setTimeout(r, 2000));
+        await new Promise((r) => setTimeout(r, 4000));
       }
     }
 
     setLoading(false);
-    setError('Server connection timeout or waking up. Please click Analyze again or re-upload image.');
+    setError('Server connection timeout. Render free web service is waking up — please click "Re-Analyze on Server" below.');
   };
 
   const clearSelection = () => {
