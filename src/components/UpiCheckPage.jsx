@@ -36,49 +36,35 @@ export default function UpiCheckPage({ onBackToForm }) {
     if (!targetFile) return;
 
     setLoading(true);
-    setLoadingMessage('Sending screenshot to backend server...');
+    setLoadingMessage('Analyzing payment screenshot on Python FastAPI backend server...');
     setError('');
     setResult(null);
 
-    let attempts = 0;
-    const maxAttempts = 8;
+    try {
+      const formData = new FormData();
+      formData.append('file', targetFile);
 
-    while (attempts < maxAttempts) {
-      attempts++;
-      try {
-        if (attempts === 1) {
-          setLoadingMessage('Analyzing screenshot on Python FastAPI backend server...');
-        } else {
-          setLoadingMessage(`⚡ Waking up Render free server... (Attempt ${attempts}/${maxAttempts} - cold boot takes ~20-30s)`);
+      const res = await fetch(`${API_BASE_URL}/api/check-upi`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json.analysis) {
+          setResult(json.analysis);
+          setLoading(false);
+          return;
         }
-
-        const formData = new FormData();
-        formData.append('file', targetFile);
-
-        const res = await fetch(`${API_BASE_URL}/api/check-upi`, {
-          method: 'POST',
-          body: formData
-        });
-
-        if (res.ok) {
-          const json = await res.json();
-          if (json.analysis) {
-            setResult(json.analysis);
-            setLoading(false);
-            return;
-          }
-        }
-      } catch (err) {
-        console.warn(`Backend connection attempt ${attempts} notice:`, err);
+      } else {
+        setError(`Backend response status ${res.status}. Please check server deployment.`);
       }
-
-      if (attempts < maxAttempts) {
-        await new Promise((r) => setTimeout(r, 4000));
-      }
+    } catch (err) {
+      console.warn('Backend server error:', err);
+      setError('Connection error reaching backend server.');
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
-    setError('Server connection timeout. Render free web service is waking up — please click "Re-Analyze on Server" below.');
   };
 
   const clearSelection = () => {
