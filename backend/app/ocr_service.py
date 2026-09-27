@@ -72,7 +72,20 @@ def extract_text_from_image(image_bytes: bytes) -> str:
     engine = get_rapid_ocr()
     if engine:
         try:
-            results, _ = engine(image_bytes)
+            # Decode and 2x scale small screenshots to enhance small digit text detection
+            import cv2
+            import numpy as np
+
+            nparr = np.frombuffer(image_bytes, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if img is not None:
+                h, w = img.shape[:2]
+                if w < 1500:
+                    img = cv2.resize(img, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
+                results, _ = engine(img)
+            else:
+                results, _ = engine(image_bytes)
+
             if results:
                 lines = [line[1] for line in results if line and len(line) > 1]
                 extracted_text = "\n".join(lines).strip()
@@ -80,6 +93,7 @@ def extract_text_from_image(image_bytes: bytes) -> str:
                     return extracted_text
         except Exception as e:
             logger.warning(f"RapidOCR execution notice: {e}")
+
 
     # Tier 2: OpenCV + PyTesseract
     try:
