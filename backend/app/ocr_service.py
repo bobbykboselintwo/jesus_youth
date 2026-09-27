@@ -79,8 +79,10 @@ def extract_text_from_image(image_bytes: bytes) -> str:
             img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             if img is not None:
                 h, w = img.shape[:2]
-                if w < 1500:
-                    img = cv2.resize(img, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
+                max_dim = 800
+                if max(h, w) > max_dim:
+                    scale = max_dim / max(h, w)
+                    img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
                 results, _ = engine(img)
             else:
                 results, _ = engine(image_bytes)

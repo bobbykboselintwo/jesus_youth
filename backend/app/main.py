@@ -7,6 +7,7 @@ from app.routes.registration import router as registration_router
 from app.ocr_service import parse_any_upi_screenshot, parse_and_validate_payment
 from datetime import datetime
 from typing import Optional
+import anyio
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -59,7 +60,7 @@ async def check_upi_screenshot_direct(file: UploadFile = File(...)):
         if not contents:
             raise HTTPException(status_code=400, detail="Empty image uploaded.")
 
-        analysis = parse_any_upi_screenshot(contents)
+        analysis = await anyio.to_thread.run_sync(parse_any_upi_screenshot, contents)
         del contents
 
         return {
@@ -87,7 +88,7 @@ async def verify_payment_screenshot_direct(
         if not contents:
             raise HTTPException(status_code=400, detail="Empty screenshot file uploaded.")
 
-        verification = parse_and_validate_payment(contents, expected_amount=expected_amount or 100.0)
+        verification = await anyio.to_thread.run_sync(parse_and_validate_payment, contents, expected_amount or 100.0)
         del contents
 
         ocr_status = verification["status"]
