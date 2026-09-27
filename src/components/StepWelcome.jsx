@@ -52,65 +52,6 @@ export default function StepWelcome({ onStart, onLookupUniqueId, lookupError, se
         </button>
       </div>
 
-      {/* ALREADY REGISTERED SECTION */}
-      <div className="already-registered-card" style={{
-        marginTop: 20,
-        padding: 16,
-        borderRadius: 12,
-        background: 'rgba(217, 4, 41, 0.05)',
-        border: '1px dashed rgba(217, 4, 41, 0.3)',
-        textAlign: 'center'
-      }}>
-        <h4 style={{ margin: '0 0 6px 0', fontSize: 13, color: 'var(--jy-crimson)', fontWeight: 'bold' }}>
-          ALREADY Registered? 🔑
-        </h4>
-        <p style={{ margin: '0 0 12px 0', fontSize: 11, color: 'var(--ink-600)' }}>
-          Enter your Unique ID to check your pass &amp; registration status:
-        </p>
-
-        <form onSubmit={handleLookupSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <input
-            type="text"
-            className="input-field"
-            placeholder="e.g. Maria-Joseph-9207200525-maria@example.com-0001"
-            value={uniqueIdInput}
-            onChange={(e) => {
-              setUniqueIdInput(e.target.value);
-              if (setLookupError) setLookupError('');
-            }}
-            style={{
-              padding: '10px 12px',
-              fontSize: 11,
-              borderRadius: 8,
-              border: lookupError ? '1px solid var(--red-700)' : '1px solid var(--ink-300)',
-              width: '100%',
-              boxSizing: 'border-box'
-            }}
-          />
-
-          {lookupError && (
-            <div style={{ color: 'var(--red-700)', fontSize: 11, fontWeight: 'bold' }}>
-              ⚠️ {lookupError}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            className="btn-secondary"
-            disabled={searching}
-            style={{
-              padding: '10px 16px',
-              fontSize: 12,
-              fontWeight: 'bold',
-              borderRadius: 8,
-              cursor: 'pointer'
-            }}
-          >
-            {searching ? 'Searching...' : 'Check Status with Unique ID →'}
-          </button>
-        </form>
-      </div>
-
       <div style={{ marginTop: 20, fontSize: 9, color: 'var(--ink-600)', textAlign: 'center', fontWeight: 'bold' }}>
         Contact Coordinators: ABRAHAM JOSEPH (<a href="tel:9567113383" style={{ color: 'var(--jy-crimson)' }}>9567113383</a>)
         <br />

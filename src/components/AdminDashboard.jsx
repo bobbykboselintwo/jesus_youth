@@ -7,12 +7,13 @@ export default function AdminDashboard({
   onBackToForm
 }) {
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('NEW_STUDENTS');
 
   const filtered = submissions.filter((item) => {
-    const matchesStatus =
-      statusFilter === 'ALL' ||
-      (item.registrationStatus || 'PENDING').toUpperCase() === statusFilter;
+    // Legacy submissions usually lack ocrStatus, new ones have it. 
+    // Alternatively, you can use a date threshold. Here we use ocrStatus presence as a proxy for "automated".
+    const isNew = item.ocrStatus != null;
+    const matchesTab = statusFilter === 'NEW_STUDENTS' ? isNew : !isNew;
 
     const query = search.toLowerCase();
     const matchesQuery =
@@ -25,12 +26,11 @@ export default function AdminDashboard({
       (item.email || '').toLowerCase().includes(query) ||
       (item.registeredBy || '').toLowerCase().includes(query);
 
-    return matchesStatus && matchesQuery;
+    return matchesTab && matchesQuery;
   });
 
-  const countPending = submissions.filter((s) => (s.registrationStatus || 'PENDING').toUpperCase() === 'PENDING').length;
-  const countApproved = submissions.filter((s) => (s.registrationStatus || '').toUpperCase() === 'APPROVED').length;
-  const countRejected = submissions.filter((s) => (s.registrationStatus || '').toUpperCase() === 'REJECTED').length;
+  const countNew = submissions.filter((s) => s.ocrStatus != null).length;
+  const countOld = submissions.filter((s) => s.ocrStatus == null).length;
 
   const exportCSV = () => {
     if (filtered.length === 0) return;
@@ -82,31 +82,17 @@ export default function AdminDashboard({
       <div className="admin-tabs">
         <button
           type="button"
-          className={`tab-btn ${statusFilter === 'ALL' ? 'active' : ''}`}
-          onClick={() => setStatusFilter('ALL')}
+          className={`tab-btn tab-approved ${statusFilter === 'NEW_STUDENTS' ? 'active' : ''}`}
+          onClick={() => setStatusFilter('NEW_STUDENTS')}
         >
-          All ({submissions.length})
+          New Students ({countNew})
         </button>
         <button
           type="button"
-          className={`tab-btn tab-pending ${statusFilter === 'PENDING' ? 'active' : ''}`}
-          onClick={() => setStatusFilter('PENDING')}
+          className={`tab-btn tab-pending ${statusFilter === 'OLD_STUDENTS' ? 'active' : ''}`}
+          onClick={() => setStatusFilter('OLD_STUDENTS')}
         >
-          Pending ({countPending})
-        </button>
-        <button
-          type="button"
-          className={`tab-btn tab-approved ${statusFilter === 'APPROVED' ? 'active' : ''}`}
-          onClick={() => setStatusFilter('APPROVED')}
-        >
-          Approved ({countApproved})
-        </button>
-        <button
-          type="button"
-          className={`tab-btn tab-rejected ${statusFilter === 'REJECTED' ? 'active' : ''}`}
-          onClick={() => setStatusFilter('REJECTED')}
-        >
-          Rejected ({countRejected})
+          Old Students ({countOld})
         </button>
       </div>
 
@@ -133,19 +119,20 @@ export default function AdminDashboard({
           <thead>
             <tr>
               <th>#</th>
+              {statusFilter === 'OLD_STUDENTS' && <th>Reg ID</th>}
               <th>Name &amp; Phone</th>
               <th>Email</th>
               <th>Parish / Diocese</th>
               <th>Size</th>
-              <th>Registered By / Connected To</th>
+              <th>Registered By</th>
               <th>Status</th>
-              <th>Actions</th>
+              {statusFilter === 'OLD_STUDENTS' && <th>Actions</th>}
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan="8" style={{ textAlign: 'center', color: 'var(--ink-500)', padding: 24, fontSize: 12 }}>
+                <td colSpan={statusFilter === 'OLD_STUDENTS' ? "9" : "7"} style={{ textAlign: 'center', color: 'var(--ink-500)', padding: 24, fontSize: 12 }}>
                   No registrations found matching criteria.
                 </td>
               </tr>
@@ -157,12 +144,16 @@ export default function AdminDashboard({
                 const isGroupChild = !!item.registeredBy && item.registeredBy !== 'Primary / Self';
                 return (
                   <tr key={idx}>
-                    <td style={{ whiteSpace: 'normal' }}>
-                      <div style={{ fontWeight: 800, fontSize: 11, color: 'var(--ink-500)' }}>{idx + 1}</div>
-                      <code style={{ fontSize: 7, fontWeight: 'bold', color: 'var(--jy-crimson)', background: 'rgba(217, 4, 41, 0.06)', padding: '2px 4px', borderRadius: 4, display: 'inline-block', marginTop: 2, wordBreak: 'break-all', lineHeight: 1.3 }}>
-                        {itemRegId}
-                      </code>
+                    <td style={{ whiteSpace: 'normal', fontWeight: 800, fontSize: 11, color: 'var(--ink-500)' }}>
+                      {idx + 1}
                     </td>
+                    {statusFilter === 'OLD_STUDENTS' && (
+                      <td style={{ whiteSpace: 'normal' }}>
+                        <code style={{ fontSize: 9, fontWeight: 'bold', color: 'var(--jy-crimson)', background: 'rgba(217, 4, 41, 0.06)', padding: '2px 4px', borderRadius: 4, display: 'inline-block', wordBreak: 'break-all', lineHeight: 1.3 }}>
+                          {itemRegId}
+                        </code>
+                      </td>
+                    )}
                     <td style={{ whiteSpace: 'normal' }}>
                       <strong style={{ fontSize: 11 }}>{item.name} {item.surname}</strong>
                       <div style={{ fontSize: 9, color: 'var(--ink-500)', marginTop: 2 }}>{item.phone}</div>
@@ -210,26 +201,28 @@ export default function AdminDashboard({
                         </div>
                       )}
                     </td>
-                    <td>
-                      <div className="action-btn-group">
-                        <button
-                          type="button"
-                          className="btn-approve"
-                          disabled={itemStatus === 'APPROVED'}
-                          onClick={() => onUpdateStatus(item.device_id || item.phone || item.regId, 'APPROVED')}
-                        >
-                          Approve ✓
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-reject"
-                          disabled={itemStatus === 'REJECTED'}
-                          onClick={() => onUpdateStatus(item.device_id || item.phone || item.regId, 'REJECTED')}
-                        >
-                          Reject ✕
-                        </button>
-                      </div>
-                    </td>
+                    {statusFilter === 'OLD_STUDENTS' && (
+                      <td>
+                        <div className="action-btn-group">
+                          <button
+                            type="button"
+                            className="btn-approve"
+                            disabled={itemStatus === 'APPROVED'}
+                            onClick={() => onUpdateStatus(item.device_id || item.phone || item.regId, 'APPROVED')}
+                          >
+                            Approve ✓
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-reject"
+                            disabled={itemStatus === 'REJECTED'}
+                            onClick={() => onUpdateStatus(item.device_id || item.phone || item.regId, 'REJECTED')}
+                          >
+                            Reject ✕
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })

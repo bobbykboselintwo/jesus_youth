@@ -15,6 +15,8 @@ export default function StepPayment({
   const [previewUrl, setPreviewUrl] = useState('');
   const [verifyingOcr, setVerifyingOcr] = useState(false);
   const [ocrResult, setOcrResult] = useState(null);
+  const [showUploadMode, setShowUploadMode] = useState(false);
+  const [timerSeconds, setTimerSeconds] = useState(0);
 
   const upiId = 'abrahamjosephthadathil200@okhdfcbank';
   const accountName = 'Abraham Joseph Thadathil';
@@ -44,6 +46,17 @@ export default function StepPayment({
     setScreenshotFile(file);
     setVerifyingOcr(true);
     setOcrResult(null);
+    setTimerSeconds(1);
+
+    // Simulate timer progression: 1..2..3..5
+    const timerInterval = setInterval(() => {
+      setTimerSeconds(prev => {
+        if (prev === 1) return 2;
+        if (prev === 2) return 3;
+        if (prev === 3) return 5;
+        return prev;
+      });
+    }, 1000);
 
     // Send image to Python FastAPI backend server for OCR verification & Mongo status check
     try {
@@ -56,6 +69,10 @@ export default function StepPayment({
         body: formData
       });
 
+      await new Promise(r => setTimeout(r, 4000));
+      clearInterval(timerInterval);
+      setTimerSeconds(5);
+
       if (res.ok) {
         const json = await res.json();
         if (json.verification) {
@@ -64,6 +81,17 @@ export default function StepPayment({
             message: json.verification.message,
             amount: json.verification.amounts_found?.[0] || null
           });
+          
+          if (json.verification.status === 'APPROVED') {
+             // Automatically proceed to submit on success
+             setTimeout(() => {
+                onSubmitPayment(file, {
+                  status: json.verification.status,
+                  message: json.verification.message,
+                  amount: json.verification.amounts_found?.[0] || null
+                });
+             }, 1000);
+          }
         }
       } else {
         setOcrResult({
@@ -73,6 +101,10 @@ export default function StepPayment({
       }
     } catch (err) {
       console.warn('Backend API connection notice:', err);
+      await new Promise(r => setTimeout(r, 4000));
+      clearInterval(timerInterval);
+      setTimerSeconds(5);
+      
       setOcrResult({
         status: 'MANUAL_REVIEW',
         message: 'Screenshot attached. Queued for fast Admin review.'
@@ -126,12 +158,12 @@ export default function StepPayment({
       {paymentSuccess ? (
         <div className="payment-success-banner">
           <div className="success-check-icon">✓</div>
-          <h3>Registration &amp; Payment Submitted!</h3>
+          <h3>Registration Successful!</h3>
           <p>
-            Your registration for {totalPeople} delegate(s) (Total: ₹{totalAmount}) has been submitted successfully and is pending review by the admin team.
+            Your registration for {totalPeople} delegate(s) (Total: ₹{totalAmount}) has been submitted successfully!
           </p>
         </div>
-      ) : (
+      ) : !showUploadMode ? (
         <>
           <div className="qr-container" style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 13, fontWeight: 'bold', marginBottom: 8, color: 'var(--jy-crimson)' }}>
@@ -162,13 +194,23 @@ export default function StepPayment({
             </div>
           </div>
 
+          <div style={{ marginTop: 20 }}>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => setShowUploadMode(true)}
+              style={{ width: '100%', minHeight: 48, fontSize: 14 }}
+            >
+              Made Payment
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
           <div className="payment-instructions" style={{ marginTop: 16 }}>
-            <ol>
-              <li>Scan the QR code above using GPay, PhonePe, Paytm, or any UPI App.</li>
-              <li>Verify payee name: <strong>{accountName}</strong>.</li>
-              <li>Pay the total registration fee of <strong>₹{totalAmount}</strong> ({totalPeople} delegate{totalPeople > 1 ? 's' : ''}).</li>
-              <li>Upload your GPay / UPI payment screenshot below for automated verification.</li>
-            </ol>
+            <h4 style={{ textAlign: 'center', color: 'var(--ink-800)' }}>
+              Please upload the screenshot so we can confirm it.
+            </h4>
           </div>
 
           {/* Screenshot Upload Box */}
@@ -180,10 +222,6 @@ export default function StepPayment({
             border: '2px dashed var(--ink-300, #cbd5e1)',
             textAlign: 'center'
           }}>
-            <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6, color: 'var(--ink-800)' }}>
-              📱 Upload GPay / UPI Payment Screenshot (Optional / Recommended)
-            </div>
-
             {!previewUrl ? (
               <label style={{
                 display: 'inline-block',
@@ -240,9 +278,9 @@ export default function StepPayment({
 
             {/* OCR Progress & Result Banner */}
             {verifyingOcr && (
-              <div style={{ marginTop: 10, fontSize: 11, color: '#2563eb', fontWeight: 600 }}>
+              <div style={{ marginTop: 10, fontSize: 12, color: '#2563eb', fontWeight: 600 }}>
                 <span className="spinner" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 6 }} />
-                Analyzing payment screenshot on server...
+                Verifying payment... {timerSeconds}s
               </div>
             )}
 
@@ -251,14 +289,14 @@ export default function StepPayment({
                 marginTop: 10,
                 padding: '8px 12px',
                 borderRadius: 8,
-                fontSize: 11,
+                fontSize: 12,
                 textAlign: 'left',
                 background: ocrResult.status === 'APPROVED' ? 'rgba(34, 197, 94, 0.1)' : ocrResult.status === 'REJECTED' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(234, 179, 8, 0.1)',
                 border: `1px solid ${ocrResult.status === 'APPROVED' ? 'rgba(34, 197, 94, 0.4)' : ocrResult.status === 'REJECTED' ? 'rgba(239, 68, 68, 0.4)' : 'rgba(234, 179, 8, 0.4)'}`,
                 color: ocrResult.status === 'APPROVED' ? '#15803d' : ocrResult.status === 'REJECTED' ? '#b91c1c' : '#a16207'
               }}>
                 <div style={{ fontWeight: 'bold', marginBottom: 2 }}>
-                  {ocrResult.status === 'APPROVED' ? '✅ Server OCR Verification: APPROVED' : ocrResult.status === 'REJECTED' ? '❌ Payment Rejected (Amount Mismatch)' : '⚡ Screenshot Attached: queued for review'}
+                  {ocrResult.status === 'APPROVED' ? '✅ Registration Successful' : ocrResult.status === 'REJECTED' ? '❌ Payment Rejected (Amount Mismatch)' : '⚡ Screenshot Attached: queued for review'}
                 </div>
                 <div>{ocrResult.message}</div>
               </div>
@@ -274,12 +312,21 @@ export default function StepPayment({
           <div style={{ marginTop: 16 }}>
             <button
               type="button"
+              className="btn-secondary"
+              onClick={() => setShowUploadMode(false)}
+              disabled={submitting}
+              style={{ width: '100%', marginBottom: 8 }}
+            >
+              ← Back to QR Code
+            </button>
+            <button
+              type="button"
               className="btn-primary"
               onClick={() => onSubmitPayment(screenshotFile, ocrResult)}
-              disabled={submitting}
+              disabled={submitting || !screenshotFile}
               style={{ width: '100%', minHeight: 44 }}
             >
-              {submitting ? <span className="spinner" /> : `Confirm Payment (₹${totalAmount}) & Complete Registration ✓`}
+              {submitting ? <span className="spinner" /> : `Manual Submit`}
             </button>
           </div>
         </>

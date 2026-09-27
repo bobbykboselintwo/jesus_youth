@@ -121,73 +121,9 @@ export default function App() {
       setStep(-3);
     } else if (href.includes('/admin') || href.includes('#admin') || href.includes('?admin')) {
       setStep(-1);
-    } else {
-      checkDeviceRegistration();
     }
   }, []);
 
-
-  // Check if current device has already registered (via API or state)
-  const checkDeviceRegistration = async () => {
-    try {
-      // 1. Try FastAPI REST endpoint
-      const res = await fetch(`${API_BASE_URL}/api/status/${deviceId}`);
-      if (res.ok) {
-        const json = await res.json();
-        if (json.registered && json.registration) {
-          setUserRegistration(json.registration);
-          setStep(6); // Render device status view
-          return;
-        }
-      }
-    } catch (err) {
-      console.warn('API status check offline, checking local device state:', err);
-    }
-
-    // 2. Check local state match by device_id
-    const existing = mvpSubmissions.find((s) => s.device_id === deviceId);
-    if (existing) {
-      setUserRegistration(existing);
-      setStep(6);
-    }
-  };
-
-  // Lookup Unique ID function for Welcome Page
-  const handleLookupUniqueId = async (inputQuery) => {
-    const query = inputQuery.trim().toLowerCase();
-    setLookupError('');
-
-    // 1. Check local submissions first
-    const foundLocal = mvpSubmissions.find((s) => {
-      const rId = (s.regId || s.registration_id || '').toLowerCase();
-      const ph = (s.phone || '').toLowerCase();
-      const em = (s.email || '').toLowerCase();
-      return rId === query || rId.includes(query) || ph === query || em === query;
-    });
-
-    if (foundLocal) {
-      setUserRegistration(foundLocal);
-      setStep(6);
-      return;
-    }
-
-    // 2. Try fetching from FastAPI backend
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/status/${encodeURIComponent(inputQuery.trim())}`);
-      if (res.ok) {
-        const json = await res.json();
-        if (json.registered && json.registration) {
-          setUserRegistration(json.registration);
-          setStep(6);
-          return;
-        }
-      }
-    } catch (err) {
-      console.warn('FastAPI lookup offline:', err);
-    }
-
-    setLookupError(`Registration not found for Unique ID: "${inputQuery.trim()}". Please check your ID and try again.`);
-  };
 
   // Group Registration Handlers
   const handleAddAnotherPerson = () => {
@@ -303,11 +239,7 @@ export default function App() {
   };
 
   const start = () => {
-    if (userRegistration) {
-      setStep(6);
-    } else {
-      setStep(1);
-    }
+    setStep(1);
   };
 
   const resetForm = () => {
@@ -407,11 +339,9 @@ export default function App() {
     clearDraft();
     setSubmitting(false);
 
-    // Show alert informing registrant to remember their Unique IDs
-    alert(`🎉 REGISTRATION SUBMITTED SUCCESSFULLY FOR ${allMembers.length} DELEGATE(S)!\n\nIMPORTANT: SAVE YOUR UNIQUE REGISTRATION IDs:\n\n${uniqueIdsSummary.join('\n')}\n\nYou will need these Unique IDs to check registration passes anytime!`);
-
+    // Show success view
     setTimeout(() => {
-      setStep(6); // Show Device Status View
+      setStep(7); // Show Final Success Step
     }, 1200);
   };
 
@@ -483,7 +413,7 @@ export default function App() {
               <button
                 type="button"
                 className="btn-icon-tag"
-                onClick={() => setStep(userRegistration ? 6 : 0)}
+                onClick={() => setStep(0)}
               >
                 App Form 📋
               </button>
@@ -502,7 +432,7 @@ export default function App() {
               <button
                 type="button"
                 className="btn-icon-tag"
-                onClick={() => setStep(userRegistration ? 6 : 0)}
+                onClick={() => setStep(0)}
               >
                 App Form
               </button>
@@ -549,7 +479,7 @@ export default function App() {
           {/* Step -3: Standalone UPI Screenshot Inspector (/upi-check) */}
           {step === -3 && (
             <UpiCheckPage
-              onBackToForm={() => setStep(userRegistration ? 6 : 0)}
+              onBackToForm={() => setStep(0)}
             />
           )}
 
@@ -574,19 +504,12 @@ export default function App() {
                 setIsAdminLoggedIn(false);
                 setStep(0);
               }}
-              onBackToForm={() => setStep(userRegistration ? 6 : 0)}
+              onBackToForm={() => setStep(0)}
             />
           )}
 
           {step === 0 && (
-            <StepWelcome
-              onStart={start}
-              isRegistered={!!userRegistration}
-              registrationStatus={userRegistration?.registrationStatus}
-              onLookupUniqueId={handleLookupUniqueId}
-              lookupError={lookupError}
-              setLookupError={setLookupError}
-            />
+            <StepWelcome onStart={start} />
           )}
 
           {step === 1 && (
@@ -635,14 +558,6 @@ export default function App() {
             />
           )}
 
-          {/* Step 6: Device Status View */}
-          {step === 6 && (
-            <StepStatusView
-              registration={userRegistration}
-              onRefreshStatus={checkDeviceRegistration}
-              onGoToWelcome={() => setStep(0)}
-            />
-          )}
 
           {step === 7 && <StepSuccess onReset={resetForm} />}
         </div>
