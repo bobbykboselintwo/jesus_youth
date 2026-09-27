@@ -1,22 +1,87 @@
-import re
+import os
 import io
+import re
 import logging
 from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger("ocr_service")
 
+# Global lazy-loaded RapidOCR engine
+_rapid_ocr_engine = None
+
 # Standard expected baseline configuration
 EXPECTED_RECIPIENT_NAME = "ABRAHAM JOSEPH THADATHIL"
 EXPECTED_UPI_ID = "abrahamjosephthadathil200@okhdfcbank"
 
+# Auto-discover Tesseract binary path if available
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TESS_ENV_DIR = os.path.join(BASE_DIR, "tesseract_env")
+TESS_BIN = os.path.join(TESS_ENV_DIR, "usr", "bin", "tesseract")
+TESS_LIB = os.path.join(TESS_ENV_DIR, "usr", "lib", "x86_64-linux-gnu")
+TESS_DATA = os.path.join(TESS_ENV_DIR, "usr", "share", "tesseract-ocr", "4.00", "tessdata")
+
+try:
+    import pytesseract
+    if os.path.exists(TESS_BIN):
+        pytesseract.pytesseract.tesseract_cmd = TESS_BIN
+        if os.path.exists(TESS_LIB):
+            ld_path = os.environ.get("LD_LIBRARY_PATH", "")
+            os.environ["LD_LIBRARY_PATH"] = f"{TESS_LIB}:{ld_path}" if ld_path else TESS_LIB
+        if os.path.exists(TESS_DATA):
+            os.environ["TESSDATA_PREFIX"] = TESS_DATA
+        logger.info(f"Using rootless Tesseract at {TESS_BIN}")
+    else:
+        possible_paths = [
+            "/usr/bin/tesseract",
+            "/usr/local/bin/tesseract",
+            r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+            r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+        ]
+        for p in possible_paths:
+            if os.path.exists(p):
+                pytesseract.pytesseract.tesseract_cmd = p
+                logger.info(f"Using system Tesseract at {p}")
+                break
+except Exception as e:
+    logger.warning(f"pytesseract setup notice: {e}")
+
+
+def get_rapid_ocr():
+    global _rapid_ocr_engine
+    if _rapid_ocr_engine is None:
+        try:
+            from rapidocr_onnxruntime import RapidOCR
+            _rapid_ocr_engine = RapidOCR()
+            logger.info("RapidOCR engine successfully initialized.")
+        except Exception as e:
+            logger.warning(f"RapidOCR initialization failed: {e}")
+            _rapid_ocr_engine = False
+    return _rapid_ocr_engine
+
+
 def extract_text_from_image(image_bytes: bytes) -> str:
     """
-    Attempts to preprocess and run OCR on image bytes using Pillow/OpenCV + Tesseract.
-    Falls back gracefully if Tesseract binary is unavailable in host environment.
+    Multi-tier OCR extraction:
+    Tier 1: RapidOCR (pure Python/ONNX CPU engine, fast, reliable, zero C++ binaries required)
+    Tier 2: OpenCV + PyTesseract
+    Tier 3: PIL + PyTesseract
     """
     extracted_text = ""
-    
-    # Try OpenCV + Tesseract
+
+    # Tier 1: RapidOCR
+    engine = get_rapid_ocr()
+    if engine:
+        try:
+            results, _ = engine(image_bytes)
+            if results:
+                lines = [line[1] for line in results if line and len(line) > 1]
+                extracted_text = "\n".join(lines).strip()
+                if extracted_text:
+                    return extracted_text
+        except Exception as e:
+            logger.warning(f"RapidOCR execution notice: {e}")
+
+    # Tier 2: OpenCV + PyTesseract
     try:
         import cv2
         import numpy as np
@@ -30,17 +95,15 @@ def extract_text_from_image(image_bytes: bytes) -> str:
             h, w = gray.shape[:2]
             if w < 1000:
                 gray = cv2.resize(gray, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
-            
-            # Contrast enhancement & OTSU Thresholding
+
             thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-            
             extracted_text = pytesseract.image_to_string(thresh)
             if not extracted_text.strip():
                 extracted_text = pytesseract.image_to_string(gray)
     except Exception as e:
         logger.warning(f"OpenCV/Tesseract processing notice: {str(e)}")
 
-    # Fallback using PIL if OpenCV/Tesseract was empty or unavailable
+    # Tier 3: PIL + PyTesseract
     if not extracted_text.strip():
         try:
             from PIL import Image
@@ -56,13 +119,7 @@ def extract_text_from_image(image_bytes: bytes) -> str:
 
 def parse_any_upi_screenshot(image_bytes: bytes) -> Dict[str, Any]:
     """
-    General OCR parser for ANY screenshot. Detects:
-    1. Is it a UPI payment screenshot?
-    2. Recipient Name / Account to which payment was made
-    3. Amount paid (₹)
-    4. Date & Time of payment
-    5. Transaction ID / UTR number
-    6. Payment Status & App source (GPay, PhonePe, Paytm, etc.)
+    General OCR parser for ANY UPI screenshot.
     """
     try:
         raw_text = extract_text_from_image(image_bytes)
@@ -73,8 +130,7 @@ def parse_any_upi_screenshot(image_bytes: bytes) -> Dict[str, Any]:
     text_lower = raw_text.lower()
     lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
 
-
-    # 1. Detect UPI & Payment Apps
+    # 1. Detect App
     app_detected = "Unknown / General UPI"
     if "google pay" in text_lower or "gpay" in text_lower:
         app_detected = "Google Pay (GPay)"
@@ -86,12 +142,16 @@ def parse_any_upi_screenshot(image_bytes: bytes) -> Dict[str, Any]:
         app_detected = "BHIM UPI"
     elif "amazon pay" in text_lower or "amazonpay" in text_lower:
         app_detected = "Amazon Pay"
-    elif "powered by upi" in text_lower or "upi" in text_lower:
-        app_detected = "UPI App"
+    elif "upi" in text_lower or "poweredby" in text_lower or "powered by" in text_lower:
+        app_detected = "UPI Payment App"
 
     # 2. Is UPI Payment Screenshot?
-    upi_keywords = ["upi", "gpay", "google pay", "phonepe", "paytm", "bhim", "paid to", "banking name", "utr", "ref no", "transferred to", "payment successful"]
-    is_upi_payment = any(kw in text_lower for kw in upi_keywords) or bool(re.search(r'₹\s*\d+', raw_text))
+    upi_keywords = [
+        "upi", "gpay", "google pay", "phonepe", "paytm", "bhim",
+        "paid to", "banking name", "utr", "ref no", "transferred to",
+        "payment successful", "abraham", "thadathil"
+    ]
+    is_upi_payment = any(kw in text_lower for kw in upi_keywords) or bool(re.search(r'[₹\?]?\s*\d+', raw_text))
 
     # 3. Detect Payment Status
     payment_status = "UNSPECIFIED"
@@ -103,63 +163,57 @@ def parse_any_upi_screenshot(image_bytes: bytes) -> Dict[str, Any]:
         payment_status = "PENDING"
 
     # 4. Extract Amount
-    # Look for ₹ symbol first: e.g. ₹100, ₹ 100, ₹100.00
+    # Clean text to prevent mistaking UTR, date, or time for amount
+    text_no_utr = re.sub(r'\b\d{12}\b', '', text_lower)
+    text_no_dates = re.sub(r'\b(202[0-9]|201[0-9])\b', '', text_no_utr)
+    text_no_time = re.sub(r'\b\d{1,2}:\d{2}(?:\s*(?:am|pm))?\b', '', text_no_dates)
+
     amounts_found = []
-    currency_matches = re.findall(r'(?:₹|rs\.?|inr)\s*(\d+(?:\.\d{1,2})?)', text_lower)
-    for match in currency_matches:
+    # Match currency symbol (₹ or OCR'd ? / rs / inr / paid) followed by amount
+    currency_matches = re.finditer(r'(?:[₹\?]|rs\.?|inr|paid)\s*(\d+(?:\.\d{1,2})?)', text_no_time)
+    for m in currency_matches:
         try:
-            amounts_found.append(float(match))
+            amt = float(m.group(1))
+            if 0.1 <= amt <= 100000:
+                amounts_found.append(amt)
         except ValueError:
             pass
 
     if not amounts_found:
         # Fallback regex for numbers
-        num_matches = re.findall(r'\b(\d{1,6}(?:\.\d{1,2})?)\b', text_lower)
-        for match in num_matches:
+        num_matches = re.finditer(r'\b(\d{1,6}(?:\.\d{1,2})?)\b', text_no_time)
+        for m in num_matches:
             try:
-                val = float(match)
-                if 1 <= val <= 100000:
+                val = float(m.group(1))
+                if 1 <= val <= 100000 and val not in [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]:
                     amounts_found.append(val)
             except ValueError:
                 pass
 
     primary_amount = amounts_found[0] if amounts_found else None
 
-    # 5. Extract Recipient Name / Account
+    # 5. Extract Recipient Name
     recipient_name = None
-    for i, line in enumerate(lines):
-        line_l = line.lower()
-        if "paid to" in line_l or "transferred to" in line_l or "receiver" in line_l:
-            cleaned = re.sub(r'^(paid to|transferred to|to:?)\s*', '', line, flags=re.IGNORECASE).strip()
-            if cleaned and len(cleaned) > 2 and not cleaned.lower().startswith("banking name"):
-                recipient_name = cleaned
-                break
-            elif i + 1 < len(lines):
-                candidate1 = lines[i + 1].strip()
-                candidate2 = lines[i + 2].strip() if i + 2 < len(lines) else ""
-                
-                if candidate1 and len(candidate1) > 2 and not any(kw in candidate1.lower() for kw in ["banking name", "powered by", "upi", "₹"]):
-                    if candidate2 and candidate2.isupper() and not any(kw in candidate2.lower() for kw in ["banking name", "powered by", "upi", "₹"]):
-                        recipient_name = f"{candidate1} {candidate2}"
-                    else:
+    if "abraham" in text_lower or "joseph" in text_lower or "thadathil" in text_lower:
+        recipient_name = "ABRAHAM JOSEPH THADATHIL"
+    else:
+        for i, line in enumerate(lines):
+            line_l = line.lower()
+            if "paid to" in line_l or "transferred to" in line_l or "receiver" in line_l:
+                cleaned = re.sub(r'^(paid to|transferred to|to:?)\s*', '', line, flags=re.IGNORECASE).strip()
+                if cleaned and len(cleaned) > 2 and not cleaned.lower().startswith("banking name"):
+                    recipient_name = cleaned
+                    break
+                elif i + 1 < len(lines):
+                    candidate1 = lines[i + 1].strip()
+                    if candidate1 and len(candidate1) > 2 and not any(kw in candidate1.lower() for kw in ["banking name", "powered", "upi"]):
                         recipient_name = candidate1
-                    break
-
-    if not recipient_name:
-        if "abraham" in text_lower or "joseph" in text_lower or "thadathil" in text_lower:
-            recipient_name = "ABRAHAM JOSEPH THADATHIL"
-        else:
-            for line in lines:
-                if len(line.split()) in [2, 3, 4] and line.isupper() and not any(kw in line.lower() for kw in ["powered", "upi", "google", "paid", "success", "banking"]):
-                    recipient_name = line
-                    break
-
+                        break
 
     # 6. Extract Date & Time
     date_time_str = None
-    # Pattern like "27 September 2026, 2:00 am" or "Sep 27, 2026" or "27/09/2026" or "02:00 PM"
     date_match = re.search(
-        r'\b(?:\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{2,4}(?:,\s*\d{1,2}:\d{2}\s*(?:am|pm)?)?|\d{1,2}/\d{1,2}/\d{2,4}(?:\s+\d{1,2}:\d{2}\s*(?:am|pm)?)?|\d{1,2}:\d{2}\s*(?:am|pm))\b',
+        r'\b(?:\d{1,2}\s*(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s*\d{2,4}(?:,\s*\d{1,2}:\d{2}\s*(?:am|pm)?)?|\d{1,2}/\d{1,2}/\d{2,4}(?:\s*\d{1,2}:\d{2}\s*(?:am|pm)?)?|\d{1,2}:\d{2}\s*(?:am|pm))\b',
         raw_text,
         re.IGNORECASE
     )
@@ -199,7 +253,7 @@ def parse_and_validate_payment(
 
     recipient_keywords = ["abraham", "joseph", "thadathil", "okhdfcbank"]
     matched_recipient_count = sum(1 for kw in recipient_keywords if kw in text_lower)
-    has_recipient_match = matched_recipient_count >= 2 or "abraham joseph" in text_lower or "thadathil" in text_lower
+    has_recipient_match = matched_recipient_count >= 1 or "abraham" in text_lower or "thadathil" in text_lower
 
     amounts_found = parsed_info["amounts_found"]
     amount_matches_expected = any(abs(amt - expected_amount) < 0.01 for amt in amounts_found)
@@ -216,7 +270,6 @@ def parse_and_validate_payment(
     else:
         status = "MANUAL_REVIEW"
         message = f"⚡ Screenshot received (Extracted Amount: ₹{primary_amount if primary_amount is not None else 'Unclear'}); queued for Admin review."
-
 
     return {
         "status": status,
