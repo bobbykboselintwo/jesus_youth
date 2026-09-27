@@ -50,9 +50,17 @@ def get_rapid_ocr():
     global _rapid_ocr_engine
     if _rapid_ocr_engine is None:
         try:
+            import os
+            os.environ["OMP_NUM_THREADS"] = "1"
+            os.environ["OPENBLAS_NUM_THREADS"] = "1"
+            os.environ["MKL_NUM_THREADS"] = "1"
             from rapidocr_onnxruntime import RapidOCR
-            _rapid_ocr_engine = RapidOCR()
-            logger.info("RapidOCR engine successfully initialized.")
+            _rapid_ocr_engine = RapidOCR(
+                use_angle_cls=False,
+                intra_op_num_threads=1,
+                inter_op_num_threads=1
+            )
+            logger.info("RapidOCR engine successfully initialized in low-memory single-thread mode.")
         except Exception as e:
             logger.warning(f"RapidOCR initialization failed: {e}")
             _rapid_ocr_engine = False
