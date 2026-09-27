@@ -56,9 +56,12 @@ export default function UpiCheckPage({ onBackToForm }) {
           setLoading(false);
           return;
         }
+      } else if (res.status === 404) {
+        setError('⚠️ Render backend is building latest update. If 404 persists, click "Manual Deploy -> Deploy latest commit" on your Render Dashboard!');
       } else {
-        setError(`Backend response status ${res.status}. Please check server deployment.`);
+        setError(`Backend server response status ${res.status}. Please check server deployment.`);
       }
+
     } catch (err) {
       console.warn('Backend server error:', err);
       setError('Connection error reaching backend server.');
