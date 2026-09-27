@@ -2,14 +2,11 @@ fastapi>=0.110.0
 uvicorn[standard]>=0.28.0
 motor>=3.3.2
 pydantic[email]>=2.6.0
-
 python-dotenv>=1.0.1
 email-validator>=2.1.0
 pytesseract>=0.3.10
 opencv-python-headless>=4.9.0
 pillow>=10.2.0
 python-multipart>=0.0.9
-rapidocr_onnxruntime>=1.4.0
-onnxruntime>=1.17.0
-
-
+rapidocr_onnxruntime>=1.2.0
+onnxruntime>=1.16.0
