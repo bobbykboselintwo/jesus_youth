@@ -40,11 +40,11 @@ app.include_router(registration_router)
 @app.get("/health/", tags=["Health"])
 @app.get("/api/health", tags=["Health"])
 async def health_check():
+    import shutil, sys
     return {
         "status": "THE API IS UP",
-        "message": "THE API IS UP",
-        "service": settings.PROJECT_NAME,
-        "version": settings.PROJECT_VERSION
+        "tesseract": shutil.which("tesseract"),
+        "python": sys.version
     }
 
 @app.post("/api/check-upi", tags=["OCR Verification"])
