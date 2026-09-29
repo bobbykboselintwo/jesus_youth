@@ -99,7 +99,7 @@ export default function App() {
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [draftRestored, setDraftRestored] = useState(false);
 
-  const [deviceId] = useState(getDeviceId());
+  const [deviceId, setDeviceId] = useState(getDeviceId());
   const [userRegistration, setUserRegistration] = useState(null);
   const [mvpSubmissions, setMvpSubmissions] = useState(INITIAL_MVP_SUBMISSIONS);
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
@@ -248,6 +248,7 @@ export default function App() {
     setGroupMembers([]);
     setErrors({});
     setUserRegistration(null);
+    setDeviceId(getDeviceId());
     setStep(0);
   };
 
