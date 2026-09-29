@@ -40,52 +40,6 @@ const INITIAL_DATA = {
   paymentRef: 'DIRECT_PAYMENT',
 };
 
-// Initial MVP sample registrations with persistent device IDs and structured Reg IDs
-const INITIAL_MVP_SUBMISSIONS = [
-  {
-    regId: 'Maria-Joseph-+91 9207200525-maria@example.com-0001',
-    device_id: 'demo_device_maria',
-    name: 'Maria',
-    surname: 'Joseph',
-    phone: '+91 9207200525',
-    email: 'maria@example.com',
-    parish: "St. Mary's Cathedral, Paroppady",
-    diocese: 'Ernakulam-Angamaly',
-    tShirtSize: 'M',
-    paymentRef: 'DIRECT_PAYMENT',
-    registrationStatus: 'PENDING',
-    submittedAt: new Date().toISOString()
-  },
-  {
-    regId: 'Naveen-Kurian-+91 9061915105-naveen@example.com-0002',
-    device_id: 'demo_device_naveen',
-    name: 'Naveen',
-    surname: 'Kurian',
-    phone: '+91 9061915105',
-    email: 'naveen@example.com',
-    parish: 'Lourdes Cathedral',
-    diocese: 'Thrissur',
-    tShirtSize: 'L',
-    paymentRef: 'DIRECT_PAYMENT',
-    registrationStatus: 'APPROVED',
-    submittedAt: new Date().toISOString()
-  },
-  {
-    regId: 'Leema-Varghese-+91 9207200525-leema@example.com-0003',
-    device_id: 'demo_device_leema',
-    name: 'Leema',
-    surname: 'Varghese',
-    phone: '+91 9207200525',
-    email: 'leema@example.com',
-    parish: 'St. Joseph Cathedral',
-    diocese: 'Kannur',
-    tShirtSize: 'S',
-    paymentRef: 'DIRECT_PAYMENT',
-    registrationStatus: 'REJECTED',
-    submittedAt: new Date().toISOString()
-  }
-];
-
 export default function App() {
   const [step, setStep] = useState(0); 
   // Step key:
@@ -101,7 +55,7 @@ export default function App() {
 
   const [deviceId, setDeviceId] = useState(getDeviceId());
   const [userRegistration, setUserRegistration] = useState(null);
-  const [mvpSubmissions, setMvpSubmissions] = useState(INITIAL_MVP_SUBMISSIONS);
+  const [mvpSubmissions, setMvpSubmissions] = useState([]);
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
 
   // Restore draft from localStorage on initial render
@@ -400,7 +354,7 @@ export default function App() {
       const res = await fetch(`${API_BASE_URL}/api/admin/registrations`);
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           setMvpSubmissions(data);
           return;
         }
