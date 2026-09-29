@@ -411,22 +411,13 @@ export default function App() {
           <p className="subtitle">VITAMIN C</p>
 
           <div className="header-actions" style={{ display: 'flex', gap: 6 }}>
-            {step === -3 ? (
+            {step === -3 && (
               <button
                 type="button"
                 className="btn-icon-tag"
                 onClick={() => setStep(0)}
               >
                 App Form 📋
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="btn-icon-tag"
-                onClick={() => setStep(-3)}
-                style={{ background: 'rgba(217, 4, 41, 0.1)', color: 'var(--jy-crimson)' }}
-              >
-                UPI Check 🔍
               </button>
             )}
 
