@@ -785,6 +785,12 @@ textarea:focus {
   border: 1px solid rgba(185, 28, 28, 0.15);
 }
 
+.pill-unfinished {
+  background: #fef08a;
+  color: #854d0e;
+  border: 1px solid rgba(161, 98, 7, 0.2);
+}
+
 .badge-chip {
   display: inline-block;
   background: rgba(153, 27, 27, 0.08);

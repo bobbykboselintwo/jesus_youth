@@ -98,7 +98,7 @@ async def verify_payment_screenshot(
                 "ocrExtractedText": verification.get("raw_text_snippet"),
                 "ocrTransactionId": verification.get("transaction_id"),
                 "paymentStatus": "VERIFIED" if ocr_status == "APPROVED" else "PENDING_REVIEW",
-                "registrationStatus": ocr_status if ocr_status in ["APPROVED", "MANUAL_REVIEW"] else "PENDING",
+                "registrationStatus": ocr_status if ocr_status in ["APPROVED", "MANUAL_REVIEW", "REJECTED"] else "PENDING",
                 "updatedAt": datetime.utcnow()
             }
 

@@ -251,9 +251,56 @@ export default function App() {
     setStep(0);
   };
 
-  // Step 4 -> Step 5 Transition (Form Completed -> Payment Screen)
-  const submitFormToPayment = () => {
+  const submitFormToPayment = async () => {
     if (!validateStep()) return;
+    setSubmitting(true);
+    
+    try {
+      const currentMember = {
+        ...data,
+        fullName: `${data.name} ${data.surname}`.trim()
+      };
+      const allMembers = groupMembers.length > 0 ? [...groupMembers, currentMember] : [currentMember];
+      const primaryPerson = allMembers[0];
+      const primaryFullName = `${primaryPerson.name} ${primaryPerson.surname}`.trim();
+
+      let newRecords = [];
+      let currentSeq = mvpSubmissions.length + 1;
+
+      for (let i = 0; i < allMembers.length; i++) {
+        const m = allMembers[i];
+        const seqStr = String(currentSeq++).padStart(4, '0');
+        const uniqueId = `${m.name.trim()}-${m.surname.trim()}-${m.phone.trim() || 'phone'}-${m.email.trim() || 'email'}-${seqStr}`;
+
+        const isPrimary = i === 0;
+        const record = {
+          ...m,
+          regId: uniqueId,
+          device_id: isPrimary ? deviceId : `device_${m.phone || Math.random().toString(36).substring(2, 9)}`,
+          registeredBy: isPrimary ? 'Primary / Self' : primaryFullName,
+          registrationStatus: 'UNFINISHED',
+          paymentStatus: 'UNFINISHED',
+          amount: 100.0,
+          submittedAt: new Date().toISOString()
+        };
+
+        const res = await fetch(`${API_BASE_URL}/api/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(record),
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.regId) record.regId = json.regId;
+        }
+        newRecords.push(record);
+      }
+      setMvpSubmissions((prev) => [...newRecords, ...prev.filter((s) => s.device_id !== deviceId)]);
+    } catch (err) {
+      console.warn('Failed to save unfinished registration:', err);
+    }
+    
+    setSubmitting(false);
     setStep(5); // Show Payment Screen
   };
 
@@ -276,7 +323,7 @@ export default function App() {
     let currentSeq = mvpSubmissions.length + 1;
 
     // Determine registration status based on OCR result
-    const calculatedStatus = ocrResult?.status === 'APPROVED' ? 'APPROVED' : 'PENDING';
+    const calculatedStatus = ocrResult?.status === 'APPROVED' ? 'APPROVED' : (ocrResult?.status === 'REJECTED' ? 'REJECTED' : 'PENDING');
 
     for (let i = 0; i < allMembers.length; i++) {
       const m = allMembers[i];
@@ -550,6 +597,7 @@ export default function App() {
             <StepPayment
               data={data}
               groupMembers={groupMembers}
+              deviceId={deviceId}
               onChange={updateField}
               onSubmitPayment={handlePaymentSubmit}
               submitting={submitting}

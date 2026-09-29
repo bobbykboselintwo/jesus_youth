@@ -5,6 +5,7 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'https://jesus-youth-
 export default function StepPayment({
   data,
   groupMembers = [],
+  deviceId,
   onSubmitPayment,
   submitting,
   submitError,
@@ -63,6 +64,9 @@ export default function StepPayment({
       const formData = new FormData();
       formData.append('file', file);
       formData.append('expected_amount', totalAmount);
+      if (deviceId) {
+        formData.append('device_id', deviceId);
+      }
 
       const res = await fetch(`${API_BASE_URL}/api/verify-payment`, {
         method: 'POST',

@@ -13,7 +13,17 @@ export default function AdminDashboard({
     // Legacy submissions usually lack ocrStatus, new ones have it. 
     // Alternatively, you can use a date threshold. Here we use ocrStatus presence as a proxy for "automated".
     const isNew = item.ocrStatus != null;
-    const matchesTab = statusFilter === 'NEW_STUDENTS' ? isNew : !isNew;
+    let matchesTab = false;
+    const status = item.registrationStatus || 'PENDING';
+    if (statusFilter === 'UNFINISHED') {
+      matchesTab = status === 'UNFINISHED';
+    } else if (statusFilter === 'REJECTED') {
+      matchesTab = status === 'REJECTED';
+    } else if (statusFilter === 'NEW_STUDENTS') {
+      matchesTab = isNew && status !== 'UNFINISHED' && status !== 'REJECTED';
+    } else if (statusFilter === 'OLD_STUDENTS') {
+      matchesTab = !isNew && status !== 'UNFINISHED' && status !== 'REJECTED';
+    }
 
     const query = search.toLowerCase();
     const matchesQuery =
@@ -29,8 +39,10 @@ export default function AdminDashboard({
     return matchesTab && matchesQuery;
   });
 
-  const countNew = submissions.filter((s) => s.ocrStatus != null).length;
-  const countOld = submissions.filter((s) => s.ocrStatus == null).length;
+  const countNew = submissions.filter((s) => s.ocrStatus != null && s.registrationStatus !== 'UNFINISHED' && s.registrationStatus !== 'REJECTED').length;
+  const countOld = submissions.filter((s) => s.ocrStatus == null && s.registrationStatus !== 'UNFINISHED' && s.registrationStatus !== 'REJECTED').length;
+  const countUnfinished = submissions.filter((s) => s.registrationStatus === 'UNFINISHED').length;
+  const countRejected = submissions.filter((s) => s.registrationStatus === 'REJECTED').length;
 
   const exportCSV = () => {
     if (filtered.length === 0) return;
@@ -93,6 +105,22 @@ export default function AdminDashboard({
           onClick={() => setStatusFilter('OLD_STUDENTS')}
         >
           Old Students ({countOld})
+        </button>
+        <button
+          type="button"
+          className={`tab-btn ${statusFilter === 'UNFINISHED' ? 'active' : ''}`}
+          onClick={() => setStatusFilter('UNFINISHED')}
+          style={{ background: statusFilter === 'UNFINISHED' ? 'rgba(234, 179, 8, 0.1)' : '', color: statusFilter === 'UNFINISHED' ? '#a16207' : '' }}
+        >
+          Unfinished ({countUnfinished})
+        </button>
+        <button
+          type="button"
+          className={`tab-btn ${statusFilter === 'REJECTED' ? 'active' : ''}`}
+          onClick={() => setStatusFilter('REJECTED')}
+          style={{ background: statusFilter === 'REJECTED' ? 'rgba(239, 68, 68, 0.1)' : '', color: statusFilter === 'REJECTED' ? '#b91c1c' : '' }}
+        >
+          Rejected ({countRejected})
         </button>
       </div>
 
