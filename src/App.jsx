@@ -317,8 +317,9 @@ export default function App() {
       uniqueIdsSummary.push(`${i + 1}. ${m.fullName}: ${record.regId}`);
     }
 
-    // If a screenshot file was attached, send to FastAPI for backend OCR verification & Mongo sync
-    if (screenshotFile) {
+    // If a screenshot file was attached and not yet fully verified, send to FastAPI for backend OCR verification & Mongo sync
+    // If ocrResult is already passed in, it means StepPayment already verified it and the db is updated, so we don't need to double-check.
+    if (screenshotFile && !ocrResult) {
       try {
         const formData = new FormData();
         formData.append('file', screenshotFile);

@@ -38,18 +38,14 @@ export default function StepPayment({
     };
   }, [previewUrl]);
 
-  const handleFileChange = async (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
+  const [alternatePayerName, setAlternatePayerName] = useState('');
+  const [showAlternateNameInput, setShowAlternateNameInput] = useState(false);
 
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-    setScreenshotFile(file);
+  const performVerification = async (file, expectedPayerName) => {
     setVerifyingOcr(true);
     setOcrResult(null);
     setTimerSeconds(1);
 
-    // Simulate timer progression: 1..2..3..5
     const timerInterval = setInterval(() => {
       setTimerSeconds(prev => {
         if (prev === 1) return 2;
@@ -59,13 +55,15 @@ export default function StepPayment({
       });
     }, 1000);
 
-    // Send image to Python FastAPI backend server for OCR verification & Mongo status check
     try {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('expected_amount', totalAmount);
       if (deviceId) {
         formData.append('device_id', deviceId);
+      }
+      if (expectedPayerName) {
+        formData.append('expected_payer_name', expectedPayerName);
       }
 
       const res = await fetch(`${API_BASE_URL}/api/verify-payment`, {
@@ -87,7 +85,6 @@ export default function StepPayment({
           });
           
           if (json.verification.status === 'APPROVED') {
-             // Automatically proceed to submit on success
              setTimeout(() => {
                 onSubmitPayment(file, {
                   status: json.verification.status,
@@ -95,6 +92,9 @@ export default function StepPayment({
                   amount: json.verification.amounts_found?.[0] || null
                 });
              }, 1000);
+          } else if (json.verification.status === 'NAME_MISMATCH') {
+             // Reset input state when first showing name mismatch
+             setShowAlternateNameInput(false);
           }
         }
       } else {
@@ -115,6 +115,25 @@ export default function StepPayment({
       });
     } finally {
       setVerifyingOcr(false);
+    }
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    setScreenshotFile(file);
+    
+    // First verification attempt uses registered primary user name
+    const defaultName = `${data.name} ${data.surname}`.trim();
+    await performVerification(file, defaultName);
+  };
+
+  const handleCheckAgain = async () => {
+    if (screenshotFile && alternatePayerName.trim()) {
+       await performVerification(screenshotFile, alternatePayerName.trim());
     }
   };
 
@@ -295,14 +314,41 @@ export default function StepPayment({
                 borderRadius: 8,
                 fontSize: 12,
                 textAlign: 'left',
-                background: ocrResult.status === 'APPROVED' ? 'rgba(34, 197, 94, 0.1)' : ocrResult.status === 'REJECTED' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(234, 179, 8, 0.1)',
-                border: `1px solid ${ocrResult.status === 'APPROVED' ? 'rgba(34, 197, 94, 0.4)' : ocrResult.status === 'REJECTED' ? 'rgba(239, 68, 68, 0.4)' : 'rgba(234, 179, 8, 0.4)'}`,
-                color: ocrResult.status === 'APPROVED' ? '#15803d' : ocrResult.status === 'REJECTED' ? '#b91c1c' : '#a16207'
+                background: ocrResult.status === 'APPROVED' ? 'rgba(34, 197, 94, 0.1)' : ocrResult.status === 'REJECTED' || ocrResult.status === 'NAME_MISMATCH' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(234, 179, 8, 0.1)',
+                border: `1px solid ${ocrResult.status === 'APPROVED' ? 'rgba(34, 197, 94, 0.4)' : ocrResult.status === 'REJECTED' || ocrResult.status === 'NAME_MISMATCH' ? 'rgba(239, 68, 68, 0.4)' : 'rgba(234, 179, 8, 0.4)'}`,
+                color: ocrResult.status === 'APPROVED' ? '#15803d' : ocrResult.status === 'REJECTED' || ocrResult.status === 'NAME_MISMATCH' ? '#b91c1c' : '#a16207'
               }}>
                 <div style={{ fontWeight: 'bold', marginBottom: 2 }}>
-                  {ocrResult.status === 'APPROVED' ? '✅ Registration Successful' : ocrResult.status === 'REJECTED' ? '❌ Payment Rejected (Amount Mismatch)' : '⚡ Screenshot Attached: queued for review'}
+                  {ocrResult.status === 'APPROVED' ? '✅ Registration Successful' : ocrResult.status === 'REJECTED' ? '❌ Payment Rejected (Amount Mismatch)' : ocrResult.status === 'NAME_MISMATCH' ? '⚠️ Name Mismatch Detected' : '⚡ Screenshot Attached: queued for review'}
                 </div>
                 <div>{ocrResult.message}</div>
+
+                {ocrResult.status === 'NAME_MISMATCH' && !showAlternateNameInput && (
+                  <div style={{ marginTop: 10, borderTop: '1px solid rgba(239, 68, 68, 0.2)', paddingTop: 10 }}>
+                    <p style={{ marginBottom: 8, fontWeight: 600 }}>Did {data.name} {data.surname} make the payment, or somebody else?</p>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                       <button type="button" onClick={() => setShowAlternateNameInput(true)} style={{ flex: 1, padding: '8px', fontSize: 11, background: '#fff', border: '1px solid #cbd5e1', borderRadius: 6, fontWeight: 'bold', cursor: 'pointer' }}>
+                         Somebody Else Made Payment
+                       </button>
+                    </div>
+                  </div>
+                )}
+                
+                {ocrResult.status === 'NAME_MISMATCH' && showAlternateNameInput && (
+                  <div style={{ marginTop: 10, borderTop: '1px solid rgba(239, 68, 68, 0.2)', paddingTop: 10 }}>
+                    <label style={{ display: 'block', fontSize: 11, marginBottom: 4, fontWeight: 'bold', color: 'var(--ink-900)' }}>Name of the person who made the payment:</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. Joseph" 
+                      value={alternatePayerName}
+                      onChange={(e) => setAlternatePayerName(e.target.value)}
+                      style={{ width: '100%', padding: '8px 10px', fontSize: 12, borderRadius: 6, border: '1px solid #cbd5e1', marginBottom: 8, boxSizing: 'border-box' }}
+                    />
+                    <button type="button" onClick={handleCheckAgain} disabled={!alternatePayerName.trim() || verifyingOcr} style={{ width: '100%', padding: '10px', fontSize: 12, background: 'var(--jy-crimson)', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 'bold', cursor: 'pointer', opacity: (!alternatePayerName.trim() || verifyingOcr) ? 0.5 : 1 }}>
+                      {verifyingOcr ? 'Checking...' : 'Check Again'}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -263,7 +263,8 @@ def parse_any_upi_screenshot(image_bytes: bytes) -> Dict[str, Any]:
 
 def parse_and_validate_payment(
     image_bytes: bytes,
-    expected_amount: float = 100.0
+    expected_amount: float = 100.0,
+    expected_payer_name: str = None
 ) -> Dict[str, Any]:
     """
     Parses OCR text and applies deterministic verification rules for event registration.
@@ -283,14 +284,26 @@ def parse_and_validate_payment(
     amount_matches_expected = any(abs(amt - expected_amount) < 0.01 for amt in amounts_found)
 
     primary_amount = parsed_info["amount"]
+    
+    # Check if payer name is in text (if expected_payer_name is provided)
+    payer_found = True
+    if expected_payer_name and raw_text:
+        payer_parts = [p.lower() for p in expected_payer_name.split() if len(p) > 2]
+        if payer_parts:
+            # We require at least one significant part of the name to be found
+            payer_found = any(part in text_lower for part in payer_parts)
 
     # Decision Engine:
     if primary_amount is not None and not amount_matches_expected:
         status = "REJECTED"
         message = f"❌ Payment Rejected: Screenshot shows payment of ₹{primary_amount}, but required fee is ₹{expected_amount}."
     elif amount_matches_expected and has_recipient_match and (has_success_indicator or has_upi_indicator):
-        status = "APPROVED"
-        message = f"✅ Payment Verified: ₹{expected_amount} paid to ABRAHAM JOSEPH THADATHIL."
+        if not payer_found:
+            status = "NAME_MISMATCH"
+            message = f"⚠️ Name Mismatch: We couldn't find the name '{expected_payer_name}' in the payment receipt."
+        else:
+            status = "APPROVED"
+            message = f"✅ Payment Verified: ₹{expected_amount} paid successfully."
     else:
         status = "MANUAL_REVIEW"
         message = f"⚡ Screenshot received (Extracted Amount: ₹{primary_amount if primary_amount is not None else 'Unclear'}); queued for Admin review."
