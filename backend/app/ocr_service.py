@@ -264,7 +264,8 @@ def parse_any_upi_screenshot(image_bytes: bytes) -> Dict[str, Any]:
 def parse_and_validate_payment(
     image_bytes: bytes,
     expected_amount: float = 100.0,
-    expected_payer_name: str = None
+    expected_payer_name: str = None,
+    bypass_name_check: bool = False
 ) -> Dict[str, Any]:
     """
     Parses OCR text and applies deterministic verification rules for event registration.
@@ -285,13 +286,15 @@ def parse_and_validate_payment(
 
     primary_amount = parsed_info["amount"]
     
-    # Check if payer name is in text (if expected_payer_name is provided)
     payer_found = True
-    if expected_payer_name and raw_text:
+    if bypass_name_check:
+        payer_found = True
+    elif expected_payer_name and raw_text:
         payer_parts = [p.lower() for p in expected_payer_name.split() if len(p) > 2]
         if payer_parts:
-            # We require at least one significant part of the name to be found
-            payer_found = any(part in text_lower for part in payer_parts)
+            # We require at least one significant part of the name to be found as a whole word
+            import re
+            payer_found = any(re.search(rf'\b{re.escape(part)}\b', text_lower) for part in payer_parts)
 
     # Decision Engine:
     if primary_amount is not None and not amount_matches_expected:
@@ -305,8 +308,8 @@ def parse_and_validate_payment(
             status = "APPROVED"
             message = f"✅ Payment Verified: ₹{expected_amount} paid successfully."
     else:
-        status = "MANUAL_REVIEW"
-        message = f"⚡ Screenshot received (Extracted Amount: ₹{primary_amount if primary_amount is not None else 'Unclear'}); queued for Admin review."
+        status = "REJECTED"
+        message = f"❌ Payment Rejected: We couldn't verify the payment details (Amount, Recipient, or Status) from the screenshot. Please upload a clear valid UPI screenshot."
 
     return {
         "status": status,

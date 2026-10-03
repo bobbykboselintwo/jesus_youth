@@ -41,7 +41,7 @@ export default function StepPayment({
   const [alternatePayerName, setAlternatePayerName] = useState('');
   const [showAlternateNameInput, setShowAlternateNameInput] = useState(false);
 
-  const performVerification = async (file, expectedPayerName) => {
+  const performVerification = async (file, expectedPayerName, bypassNameCheck = false) => {
     setVerifyingOcr(true);
     setOcrResult(null);
     setTimerSeconds(1);
@@ -64,6 +64,9 @@ export default function StepPayment({
       }
       if (expectedPayerName) {
         formData.append('expected_payer_name', expectedPayerName);
+      }
+      if (bypassNameCheck) {
+        formData.append('bypass_name_check', 'true');
       }
 
       const res = await fetch(`${API_BASE_URL}/api/verify-payment`, {
@@ -99,8 +102,8 @@ export default function StepPayment({
         }
       } else {
         setOcrResult({
-          status: 'MANUAL_REVIEW',
-          message: 'Screenshot uploaded. Queued for Admin review.'
+          status: 'REJECTED',
+          message: 'Server error processing screenshot. Please try again.'
         });
       }
     } catch (err) {
@@ -110,8 +113,8 @@ export default function StepPayment({
       setTimerSeconds(5);
       
       setOcrResult({
-        status: 'MANUAL_REVIEW',
-        message: 'Screenshot attached. Queued for fast Admin review.'
+        status: 'REJECTED',
+        message: 'Network issue. Could not verify payment.'
       });
     } finally {
       setVerifyingOcr(false);
@@ -128,12 +131,14 @@ export default function StepPayment({
     
     // First verification attempt uses registered primary user name
     const defaultName = `${data.name} ${data.surname}`.trim();
-    await performVerification(file, defaultName);
+    await performVerification(file, defaultName, false);
   };
 
   const handleCheckAgain = async () => {
     if (screenshotFile && alternatePayerName.trim()) {
-       await performVerification(screenshotFile, alternatePayerName.trim());
+       // Second verification explicitly bypasses the strict name check
+       // since the user has explicitly confirmed the payer's name
+       await performVerification(screenshotFile, alternatePayerName.trim(), true);
     }
   };
 
@@ -319,7 +324,7 @@ export default function StepPayment({
                 color: ocrResult.status === 'APPROVED' ? '#15803d' : ocrResult.status === 'REJECTED' || ocrResult.status === 'NAME_MISMATCH' ? '#b91c1c' : '#a16207'
               }}>
                 <div style={{ fontWeight: 'bold', marginBottom: 2 }}>
-                  {ocrResult.status === 'APPROVED' ? '✅ Registration Successful' : ocrResult.status === 'REJECTED' ? '❌ Payment Rejected (Amount Mismatch)' : ocrResult.status === 'NAME_MISMATCH' ? '⚠️ Name Mismatch Detected' : '⚡ Screenshot Attached: queued for review'}
+                  {ocrResult.status === 'APPROVED' ? '✅ Registration Successful' : ocrResult.status === 'REJECTED' ? '❌ Payment Rejected' : ocrResult.status === 'NAME_MISMATCH' ? '⚠️ Name Mismatch Detected' : '⚡ Screenshot Attached: queued for review'}
                 </div>
                 <div>{ocrResult.message}</div>
 
@@ -369,15 +374,7 @@ export default function StepPayment({
             >
               ← Back to QR Code
             </button>
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={() => onSubmitPayment(screenshotFile, ocrResult)}
-              disabled={submitting || !screenshotFile}
-              style={{ width: '100%', minHeight: 44 }}
-            >
-              {submitting ? <span className="spinner" /> : `Manual Submit`}
-            </button>
+            {/* Manual Submit removed to enforce strict automatic OCR verification */}
           </div>
         </>
       )}

@@ -79,7 +79,8 @@ async def verify_payment_screenshot_direct(
     device_id: Optional[str] = Form(None),
     regId: Optional[str] = Form(None),
     expected_amount: Optional[float] = Form(100.0),
-    expected_payer_name: Optional[str] = Form(None)
+    expected_payer_name: Optional[str] = Form(None),
+    bypass_name_check: bool = Form(False)
 ):
     """
     Direct endpoint in main.py for GPay/UPI payment screenshot verification during registration.
@@ -89,7 +90,7 @@ async def verify_payment_screenshot_direct(
         if not contents:
             raise HTTPException(status_code=400, detail="Empty screenshot file uploaded.")
 
-        verification = await anyio.to_thread.run_sync(parse_and_validate_payment, contents, expected_amount or 100.0, expected_payer_name)
+        verification = await anyio.to_thread.run_sync(parse_and_validate_payment, contents, expected_amount or 100.0, expected_payer_name, bypass_name_check)
         del contents
 
         ocr_status = verification["status"]

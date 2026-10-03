@@ -70,7 +70,8 @@ async def verify_payment_screenshot(
     device_id: Optional[str] = Form(None),
     regId: Optional[str] = Form(None),
     expected_amount: Optional[float] = Form(100.0),
-    expected_payer_name: Optional[str] = Form(None)
+    expected_payer_name: Optional[str] = Form(None),
+    bypass_name_check: bool = Form(False)
 ):
     """
     Accepts uploaded GPay/UPI payment screenshot, processes in-memory using OpenCV+Tesseract,
@@ -81,7 +82,7 @@ async def verify_payment_screenshot(
         if not contents:
             raise HTTPException(status_code=400, detail="Empty screenshot file uploaded.")
 
-        verification = parse_and_validate_payment(contents, expected_amount=expected_amount or 100.0, expected_payer_name=expected_payer_name)
+        verification = parse_and_validate_payment(contents, expected_amount=expected_amount or 100.0, expected_payer_name=expected_payer_name, bypass_name_check=bypass_name_check)
         del contents  # Ensure immediate RAM release
 
         ocr_status = verification["status"]
